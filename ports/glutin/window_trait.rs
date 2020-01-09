@@ -5,7 +5,7 @@
 //! Definition of Window.
 //! Implemented by headless and headed windows.
 
-use glutin;
+use winit;
 use servo::compositing::windowing::{WindowEvent, WindowMethods};
 use servo::embedder_traits::Cursor;
 use servo::webrender_api::units::{DeviceIntPoint, DeviceIntSize};
@@ -15,11 +15,11 @@ pub const LINE_HEIGHT: f32 = 38.0;
 
 pub trait WindowPortsMethods: WindowMethods + webxr::glwindow::GlWindow {
     fn get_events(&self) -> Vec<WindowEvent>;
-    fn id(&self) -> glutin::WindowId;
+    fn id(&self) -> winit::WindowId;
     fn has_events(&self) -> bool;
     fn page_height(&self) -> f32;
     fn get_fullscreen(&self) -> bool;
-    fn winit_event_to_servo_event(&self, event: glutin::WindowEvent);
+    fn winit_event_to_servo_event(&self, event: winit::WindowEvent);
     fn is_animating(&self) -> bool;
     fn set_title(&self, _title: &str) {}
     fn set_inner_size(&self, _size: DeviceIntSize) {}

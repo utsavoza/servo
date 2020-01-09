@@ -105,6 +105,9 @@ def mocked_only():
     windows_release()
     magicleap_dev()
     magicleap_nightly()
+    # FIXME: Reenable android testing once smup and surfmanup
+    # work with android.
+    android_nightly()
     decisionlib.DockerWorkerTask("Indexed by task definition").find_or_create()
 
 
@@ -494,9 +497,7 @@ def macos_release_build_with_debug_assertions(priority=None):
             "./etc/ci/lockfile_changed.sh",
             "tar -czf target.tar.gz" +
             " target/release/servo" +
-            " target/release/build/osmesa-src-*/output" +
-            " target/release/build/osmesa-src-*/out/src/gallium/targets/osmesa/.libs" +
-            " target/release/build/osmesa-src-*/out/src/mapi/shared-glapi/.libs",
+            " resources",
         ]))
         .with_artifacts("repo/target.tar.gz")
         .find_or_create("build.macos_x64_release_w_assertions." + CONFIG.task_id())
@@ -524,8 +525,7 @@ def linux_release_build_with_debug_assertions(layout_2020):
             ./etc/ci/lockfile_changed.sh
             tar -czf /target.tar.gz \
                 target/release/servo \
-                target/release/build/osmesa-src-*/output \
-                target/release/build/osmesa-src-*/out/lib/gallium
+                resources
             sccache --show-stats
         """ % build_args)
         .with_artifacts("/target.tar.gz")

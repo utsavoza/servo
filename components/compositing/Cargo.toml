@@ -41,6 +41,7 @@ style_traits = {path = "../style_traits"}
 time = "0.1.17"
 webrender = {git = "https://github.com/servo/webrender", features = ["capture"]}
 webrender_api = {git = "https://github.com/servo/webrender"}
+webrender_traits = {path = "../webrender_traits"}
 webvr_traits = {path = "../webvr_traits"}
 webxr = {git = "https://github.com/servo/webxr"}
 

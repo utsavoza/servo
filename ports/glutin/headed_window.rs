@@ -2,27 +2,21 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-//! A glutin window implementation.
+//! A winit window implementation.
 
-use crate::app;
-use crate::context::GlContext;
 use crate::events_loop::EventsLoop;
 use crate::keyutils::keyboard_event_from_winit;
 use crate::window_trait::{WindowPortsMethods, LINE_HEIGHT};
 use euclid::{
-    Angle, default::Size2D as UntypedSize2D, Point2D, Rotation3D, Scale, Size2D, UnknownUnit,
+    Angle, Point2D, Rotation3D, Scale, Size2D, UnknownUnit,
     Vector2D, Vector3D,
 };
-use gleam::gl;
-use glutin::dpi::{LogicalPosition, LogicalSize, PhysicalSize};
+use winit::dpi::{LogicalPosition, LogicalSize, PhysicalSize};
 #[cfg(target_os = "macos")]
-use glutin::os::macos::{ActivationPolicy, WindowBuilderExt};
-#[cfg(target_os = "linux")]
-use glutin::os::unix::WindowExt;
-use glutin::Api;
+use winit::os::macos::{ActivationPolicy, WindowBuilderExt};
 #[cfg(any(target_os = "linux", target_os = "windows"))]
-use glutin::Icon;
-use glutin::{ElementState, KeyboardInput, MouseButton, MouseScrollDelta, TouchPhase, VirtualKeyCode};
+use winit::Icon;
+use winit::{ElementState, KeyboardInput, MouseButton, MouseScrollDelta, TouchPhase, VirtualKeyCode};
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 use image;
 use keyboard_types::{Key, KeyState, KeyboardEvent};
@@ -30,22 +24,34 @@ use servo::compositing::windowing::{AnimationState, MouseWindowEvent, WindowEven
 use servo::compositing::windowing::{EmbedderCoordinates, WindowMethods};
 use servo::embedder_traits::Cursor;
 use servo::script_traits::{TouchEventType, WheelMode, WheelDelta};
-use servo::servo_config::{opts, pref};
+use servo::servo_config::opts;
+use servo::servo_config::pref;
 use servo::servo_geometry::DeviceIndependentPixel;
 use servo::style_traits::DevicePixel;
 use servo::webrender_api::ScrollLocation;
 use servo::webrender_api::units::{DeviceIntPoint, DeviceIntRect, DeviceIntSize};
+use servo::webrender_traits::WebrenderSurfman;
 use servo_media::player::context::{GlApi, GlContext as PlayerGLContext, NativeDisplay};
 use std::cell::{Cell, RefCell};
 use std::mem;
 use std::rc::Rc;
+#[cfg(target_os = "linux")]
+use surfman::platform::generic::multi::connection::NativeConnection;
+#[cfg(target_os = "linux")]
+use surfman::platform::generic::multi::context::NativeContext;
+use surfman::Connection;
+use surfman::ContextAttributes;
+use surfman::ContextAttributeFlags;
+use surfman::Device;
+use surfman::GLApi;
+use surfman::GLVersion;
+use surfman::NativeWidget;
+use surfman::SurfaceType;
 #[cfg(target_os = "windows")]
 use winapi;
 
-const MULTISAMPLES: u16 = 16;
-
 #[cfg(target_os = "macos")]
-fn builder_with_platform_options(mut builder: glutin::WindowBuilder) -> glutin::WindowBuilder {
+fn builder_with_platform_options(mut builder: winit::WindowBuilder) -> winit::WindowBuilder {
     if opts::get().output_file.is_some() {
         // Prevent the window from showing in Dock.app, stealing focus,
         // when generating an output file.
@@ -55,29 +61,25 @@ fn builder_with_platform_options(mut builder: glutin::WindowBuilder) -> glutin::
 }
 
 #[cfg(not(target_os = "macos"))]
-fn builder_with_platform_options(builder: glutin::WindowBuilder) -> glutin::WindowBuilder {
+fn builder_with_platform_options(builder: winit::WindowBuilder) -> winit::WindowBuilder {
     builder
 }
 
 pub struct Window {
-    gl_context: RefCell<GlContext>,
-    events_loop: Rc<RefCell<EventsLoop>>,
+    winit_window: winit::Window,
+    webrender_surfman: WebrenderSurfman,
     screen_size: Size2D<u32, DeviceIndependentPixel>,
     inner_size: Cell<Size2D<u32, DeviceIndependentPixel>>,
-    mouse_down_button: Cell<Option<glutin::MouseButton>>,
+    mouse_down_button: Cell<Option<winit::MouseButton>>,
     mouse_down_point: Cell<Point2D<i32, DevicePixel>>,
-    primary_monitor: glutin::MonitorId,
+    primary_monitor: winit::MonitorId,
     event_queue: RefCell<Vec<WindowEvent>>,
     mouse_pos: Cell<Point2D<i32, DevicePixel>>,
     last_pressed: Cell<Option<KeyboardEvent>>,
     animation_state: Cell<AnimationState>,
     fullscreen: Cell<bool>,
-    gl: Rc<dyn gl::Gl>,
     xr_rotation: Cell<Rotation3D<f32, UnknownUnit, UnknownUnit>>,
     xr_translation: Cell<Vector3D<f32, UnknownUnit>>,
-    angle: bool,
-    enable_vsync: bool,
-    use_msaa: bool,
     no_native_titlebar: bool,
     device_pixels_per_px: Option<f32>,
 }
@@ -97,11 +99,7 @@ fn window_creation_scale_factor() -> Scale<f32, DeviceIndependentPixel, DevicePi
 impl Window {
     pub fn new(
         win_size: Size2D<u32, DeviceIndependentPixel>,
-        sharing: Option<&Window>,
         events_loop: Rc<RefCell<EventsLoop>>,
-        angle: bool,
-        enable_vsync: bool,
-        use_msaa: bool,
         no_native_titlebar: bool,
         device_pixels_per_px: Option<f32>,
     ) -> Window {
@@ -117,7 +115,7 @@ impl Window {
         let width = win_size.to_untyped().width;
         let height = win_size.to_untyped().height;
 
-        let mut window_builder = glutin::WindowBuilder::new()
+        let mut window_builder = winit::WindowBuilder::new()
             .with_title("Servo".to_string())
             .with_decorations(!no_native_titlebar)
             .with_transparency(no_native_titlebar)
@@ -127,38 +125,13 @@ impl Window {
 
         window_builder = builder_with_platform_options(window_builder);
 
-        let mut context_builder = glutin::ContextBuilder::new()
-            .with_gl(app::gl_version(angle))
-            .with_vsync(enable_vsync);
-
-        if use_msaa {
-            context_builder = context_builder.with_multisampling(MULTISAMPLES)
-        }
-
-        let context = match sharing {
-            Some(sharing) => sharing.gl_context.borrow().new_window(
-                context_builder,
-                window_builder,
-                events_loop.borrow().as_winit()
-            ),
-            None => context_builder.build_windowed(window_builder, events_loop.borrow().as_winit()),
-        }.expect("Failed to create window.");
+        let winit_window = window_builder.build(events_loop.borrow().as_winit()).expect("Failed to create window.");
 
         #[cfg(any(target_os = "linux", target_os = "windows"))]
         {
             let icon_bytes = include_bytes!("../../resources/servo64.png");
-            context.window().set_window_icon(Some(load_icon(icon_bytes)));
+            winit_window.set_window_icon(Some(load_icon(icon_bytes)));
         }
-
-        if let Some(sharing) = sharing {
-            debug!("Making window {:?} not current", sharing.gl_context.borrow().window().id());
-            sharing.gl_context.borrow_mut().make_not_current();
-        }
-
-        let context = unsafe {
-            debug!("Making window {:?} current", context.window().id());
-            context.make_current().expect("Couldn't make window current")
-        };
 
         let primary_monitor = events_loop.borrow().as_winit().get_primary_monitor();
 
@@ -168,42 +141,42 @@ impl Window {
         } = primary_monitor.get_dimensions();
         let screen_size = Size2D::new(screen_width as u32, screen_height as u32);
         // TODO(ajeffrey): can this fail?
-        let LogicalSize { width, height } = context
-            .window()
+        let LogicalSize { width, height } = winit_window
             .get_inner_size()
             .expect("Failed to get window inner size.");
         let inner_size = Size2D::new(width as u32, height as u32);
 
-        context.window().show();
+        winit_window.show();
 
-        let gl = if let Some(sharing) = sharing {
-            sharing.gl.clone()
-        } else { match context.get_api() {
-            Api::OpenGl => unsafe {
-                gl::GlFns::load_with(|s| context.get_proc_address(s) as *const _)
-            },
-            Api::OpenGlEs => unsafe {
-                gl::GlesFns::load_with(|s| context.get_proc_address(s) as *const _)
-            },
-            Api::WebGl => unreachable!("webgl is unsupported"),
-        } };
+        // Initialize surfman
+        let connection = Connection::from_winit_window(&winit_window).expect("Failed to create connection");
+        let adapter = connection.create_adapter().expect("Failed to create adapter");
+        let flags = ContextAttributeFlags::ALPHA | ContextAttributeFlags::DEPTH;
+        let version = match connection.gl_api() {
+            GLApi::GLES => GLVersion { major: 3, minor: 0 },
+            GLApi::GL => GLVersion { major: 3, minor: 2 }
+        };
+        let context_attributes = ContextAttributes { flags, version };
+        let native_widget = connection
+            .create_native_widget_from_winit_window(&winit_window)
+            .expect("Failed to create native widget");
+        let surface_type = SurfaceType::Widget { native_widget };
+        let webrender_surfman = WebrenderSurfman::create(
+            &connection,
+            &adapter,
+            context_attributes,
+            surface_type,
+        ).expect("Failed to create WR surfman");
 
-        gl.clear_color(0.6, 0.6, 0.6, 1.0);
-        gl.clear(gl::COLOR_BUFFER_BIT);
-        gl.finish();
-
-        let context = GlContext::Current(context);
-
-        debug!("Created window {:?}", context.window().id());
-        let window = Window {
-            gl_context: RefCell::new(context),
-            events_loop,
+        debug!("Created window {:?}", winit_window.id());
+        Window {
+            winit_window,
+            webrender_surfman,
             event_queue: RefCell::new(vec![]),
             mouse_down_button: Cell::new(None),
             mouse_down_point: Cell::new(Point2D::new(0, 0)),
             mouse_pos: Cell::new(Point2D::new(0, 0)),
             last_pressed: Cell::new(None),
-            gl: gl.clone(),
             animation_state: Cell::new(AnimationState::Idle),
             fullscreen: Cell::new(false),
             inner_size: Cell::new(inner_size),
@@ -211,16 +184,9 @@ impl Window {
             screen_size,
             xr_rotation: Cell::new(Rotation3D::identity()),
             xr_translation: Cell::new(Vector3D::zero()),
-            angle,
-            enable_vsync,
-            use_msaa,
             no_native_titlebar,
             device_pixels_per_px,
-        };
-
-        window.present();
-
-        window
+        }
     }
 
     fn handle_received_character(&self, mut ch: char) {
@@ -293,7 +259,7 @@ impl Window {
     }
 
     fn handle_xr_rotation(&self, input: &KeyboardInput) {
-        if input.state != glutin::ElementState::Pressed {
+        if input.state != winit::ElementState::Pressed {
             return;
         }
         let mut x = 0.0;
@@ -318,8 +284,8 @@ impl Window {
     /// Helper function to handle a click
     fn handle_mouse(
         &self,
-        button: glutin::MouseButton,
-        action: glutin::ElementState,
+        button: winit::MouseButton,
+        action: winit::ElementState,
         coords: Point2D<i32, DevicePixel>,
     ) {
         use servo::script_traits::MouseButton;
@@ -359,7 +325,7 @@ impl Window {
     }
 
     fn device_hidpi_factor(&self) -> Scale<f32, DeviceIndependentPixel, DevicePixel> {
-        Scale::new(self.gl_context.borrow().window().get_hidpi_factor() as f32)
+        Scale::new(self.winit_window.get_hidpi_factor() as f32)
     }
 
     fn servo_hidpi_factor(&self) -> Scale<f32, DeviceIndependentPixel, DevicePixel> {
@@ -385,33 +351,31 @@ impl WindowPortsMethods for Window {
     fn page_height(&self) -> f32 {
         let dpr = self.servo_hidpi_factor();
         let size = self
-            .gl_context
-            .borrow()
-            .window()
+            .winit_window
             .get_inner_size()
             .expect("Failed to get window inner size.");
         size.height as f32 * dpr.get()
     }
 
     fn set_title(&self, title: &str) {
-        self.gl_context.borrow().window().set_title(title);
+        self.winit_window.set_title(title);
     }
 
     fn set_inner_size(&self, size: DeviceIntSize) {
         let size = size.to_f32() / self.device_hidpi_factor();
-        self.gl_context.borrow_mut().window()
+        self.winit_window
             .set_inner_size(LogicalSize::new(size.width.into(), size.height.into()))
     }
 
     fn set_position(&self, point: DeviceIntPoint) {
         let point = point.to_f32() / self.device_hidpi_factor();
-        self.gl_context.borrow_mut().window()
+        self.winit_window
             .set_position(LogicalPosition::new(point.x.into(), point.y.into()))
     }
 
     fn set_fullscreen(&self, state: bool) {
         if self.fullscreen.get() != state {
-            self.gl_context.borrow_mut().window()
+            self.winit_window
                 .set_fullscreen(if state { Some(self.primary_monitor.clone()) } else { None });
         }
         self.fullscreen.set(state);
@@ -422,7 +386,7 @@ impl WindowPortsMethods for Window {
     }
 
     fn set_cursor(&self, cursor: Cursor) {
-        use glutin::MouseCursor;
+        use winit::MouseCursor;
 
         let winit_cursor = match cursor {
             Cursor::Default => MouseCursor::Default,
@@ -461,27 +425,27 @@ impl WindowPortsMethods for Window {
             Cursor::ZoomOut => MouseCursor::ZoomOut,
             _ => MouseCursor::Default,
         };
-        self.gl_context.borrow_mut().window().set_cursor(winit_cursor);
+        self.winit_window.set_cursor(winit_cursor);
     }
 
     fn is_animating(&self) -> bool {
         self.animation_state.get() == AnimationState::Animating
     }
 
-    fn id(&self) -> glutin::WindowId {
-        self.gl_context.borrow().window().id()
+    fn id(&self) -> winit::WindowId {
+        self.winit_window.id()
     }
 
-    fn winit_event_to_servo_event(&self, event: glutin::WindowEvent) {
+    fn winit_event_to_servo_event(&self, event: winit::WindowEvent) {
         match event {
-            glutin::WindowEvent::ReceivedCharacter(ch) => self.handle_received_character(ch),
-            glutin::WindowEvent::KeyboardInput { input, .. } => self.handle_keyboard_input(input),
-            glutin::WindowEvent::MouseInput { state, button, .. } => {
+            winit::WindowEvent::ReceivedCharacter(ch) => self.handle_received_character(ch),
+            winit::WindowEvent::KeyboardInput { input, .. } => self.handle_keyboard_input(input),
+            winit::WindowEvent::MouseInput { state, button, .. } => {
                 if button == MouseButton::Left || button == MouseButton::Right {
                     self.handle_mouse(button, state, self.mouse_pos.get());
                 }
             },
-            glutin::WindowEvent::CursorMoved { position, .. } => {
+            winit::WindowEvent::CursorMoved { position, .. } => {
                 let pos = position.to_physical(self.device_hidpi_factor().get() as f64);
                 let (x, y): (i32, i32) = pos.into();
                 self.mouse_pos.set(Point2D::new(x, y));
@@ -491,7 +455,7 @@ impl WindowPortsMethods for Window {
                         x as f32, y as f32,
                     )));
             },
-            glutin::WindowEvent::MouseWheel { delta, phase, .. } => {
+            winit::WindowEvent::MouseWheel { delta, phase, .. } => {
                 let (mut dx, mut dy, mode) = match delta {
                     MouseScrollDelta::LineDelta(dx, dy) => (dx as f64, (dy * LINE_HEIGHT) as f64,
                                                             WheelMode::DeltaLine),
@@ -524,7 +488,7 @@ impl WindowPortsMethods for Window {
                 self.event_queue.borrow_mut().push(wheel_event);
                 self.event_queue.borrow_mut().push(scroll_event);
             },
-            glutin::WindowEvent::Touch(touch) => {
+            winit::WindowEvent::Touch(touch) => {
                 use servo::script_traits::TouchId;
 
                 let phase = winit_phase_to_touch_event_type(touch.phase);
@@ -537,15 +501,16 @@ impl WindowPortsMethods for Window {
                     .borrow_mut()
                     .push(WindowEvent::Touch(phase, id, point));
             },
-            glutin::WindowEvent::Refresh => {
+            winit::WindowEvent::Refresh => {
                 self.event_queue.borrow_mut().push(WindowEvent::Refresh);
             },
-            glutin::WindowEvent::CloseRequested => {
+            winit::WindowEvent::CloseRequested => {
                 self.event_queue.borrow_mut().push(WindowEvent::Quit);
             },
-            glutin::WindowEvent::Resized(size) => {
-                let physical_size = size.to_physical(self.device_hidpi_factor().get() as f64);
-                self.gl_context.borrow_mut().resize(physical_size);
+            winit::WindowEvent::Resized(size) => {
+                // TODO: do we need to resize the surfman render surface?
+                //   let physical_size = size.to_physical(self.device_hidpi_factor().get() as f64);
+                //   self.gl_context.borrow_mut().resize(physical_size);
                 // window.set_inner_size() takes DeviceIndependentPixel.
                 let (width, height) = size.into();
                 let new_size = Size2D::new(width, height);
@@ -560,28 +525,10 @@ impl WindowPortsMethods for Window {
 }
 
 impl webxr::glwindow::GlWindow for Window {
-    fn make_current(&self) {
-        debug!("Making window {:?} current", self.gl_context.borrow().window().id());
-        self.gl_context.borrow_mut().make_current();
-    }
-
-    fn swap_buffers(&self) {
-        debug!("Swapping buffers on window {:?}", self.gl_context.borrow().window().id());
-        self.gl_context.borrow().swap_buffers();
-        self.gl_context.borrow_mut().make_not_current();
-    }
-
-    fn size(&self) -> UntypedSize2D<gl::GLsizei> {
-        let dpr = self.device_hidpi_factor().get() as f64;
-        let size = self
-            .gl_context
-            .borrow()
-            .window()
-            .get_inner_size()
-            .expect("Failed to get window inner size.");
-        let size = size.to_physical(dpr);
-        let (w, h): (u32, u32) = size.into();
-        Size2D::new(w as i32, h as i32)
+    fn create_native_widget(&self, _device: &Device) -> NativeWidget {
+        // This is why we keep no_native_titlebar around
+        let _nntb = self.no_native_titlebar;
+        unimplemented!()
     }
 
     fn get_rotation(&self) -> Rotation3D<f32, UnknownUnit, UnknownUnit> {
@@ -591,41 +538,18 @@ impl webxr::glwindow::GlWindow for Window {
     fn get_translation(&self) -> Vector3D<f32, UnknownUnit> {
         self.xr_translation.get().clone()
     }
-
-    fn new_window(&self) -> Result<Rc<dyn webxr::glwindow::GlWindow>, ()> {
-        let window = Rc::new(Window::new(
-            self.inner_size.get(),
-            Some(self),
-            self.events_loop.clone(),
-            self.angle,
-            self.enable_vsync,
-            self.use_msaa,
-            self.no_native_titlebar,
-            self.device_pixels_per_px,
-        ));
-        app::register_window(window.clone());
-        Ok(window)
-    }
 }
 
 impl WindowMethods for Window {
-    fn gl(&self) -> Rc<dyn gl::Gl> {
-        self.gl.clone()
-    }
-
     fn get_coordinates(&self) -> EmbedderCoordinates {
         // TODO(ajeffrey): can this fail?
         let dpr = self.device_hidpi_factor();
         let LogicalSize { width, height } = self
-            .gl_context
-            .borrow()
-            .window()
+            .winit_window
             .get_outer_size()
             .expect("Failed to get window outer size.");
         let LogicalPosition { x, y } = self
-            .gl_context
-            .borrow()
-            .window()
+            .winit_window
             .get_position()
             .unwrap_or(LogicalPosition::new(0., 0.));
         let win_size = (Size2D::new(width as f32, height as f32) * dpr).to_i32();
@@ -633,9 +557,7 @@ impl WindowMethods for Window {
         let screen = (self.screen_size.to_f32() * dpr).to_i32();
 
         let LogicalSize { width, height } = self
-            .gl_context
-            .borrow()
-            .window()
+            .winit_window
             .get_inner_size()
             .expect("Failed to get window inner size.");
         let inner_size = (Size2D::new(width as f32, height as f32) * dpr).to_i32();
@@ -647,31 +569,47 @@ impl WindowMethods for Window {
             framebuffer,
             window: (win_size, win_origin),
             screen: screen,
-            // FIXME: Glutin doesn't have API for available size. Fallback to screen size
+            // FIXME: Winit doesn't have API for available size. Fallback to screen size
             screen_avail: screen,
             hidpi_factor: self.servo_hidpi_factor(),
         }
-    }
-
-    fn present(&self) {
-        self.gl_context.borrow().swap_buffers();
-        self.gl_context.borrow_mut().make_not_current();
     }
 
     fn set_animation_state(&self, state: AnimationState) {
         self.animation_state.set(state);
     }
 
-    fn make_gl_context_current(&self) {
-        self.gl_context.borrow_mut().make_current();
+    fn webrender_surfman(&self) -> WebrenderSurfman {
+        self.webrender_surfman.clone()
     }
 
     fn get_gl_context(&self) -> PlayerGLContext {
-        if pref!(media.glvideo.enabled) {
-            return self.gl_context.borrow().raw_context();
+        if !pref!(media.glvideo.enabled) {
+            return PlayerGLContext::Unknown;
         }
 
-        return PlayerGLContext::Unknown;
+        #[allow(unused_variables)]
+        let native_context = self.webrender_surfman.native_context();
+
+        #[cfg(target_os = "windows")]
+        return PlayerGLContext::Egl(native_context.egl_context as usize);
+
+        #[cfg(target_os = "linux")]
+        return match native_context {
+            NativeContext::Default(NativeContext::Default(native_context)) =>
+                PlayerGLContext::Egl(native_context.egl_context as usize),
+            NativeContext::Default(NativeContext::Alternate(native_context)) =>
+                PlayerGLContext::Egl(native_context.egl_context as usize),
+            NativeContext::Alternate(_) => unimplemented!(),
+        };
+
+        // @TODO(victor): https://github.com/servo/media/pull/315
+        #[cfg(target_os = "macos")]
+        #[allow(unreachable_code)]
+        return unimplemented!();
+
+        #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+        return unimplemented!();
     }
 
     fn get_native_display(&self) -> NativeDisplay {
@@ -679,48 +617,41 @@ impl WindowMethods for Window {
             return NativeDisplay::Unknown;
         }
 
+        #[allow(unused_variables)]
+        let native_connection = self.webrender_surfman.connection().native_connection();
+        #[allow(unused_variables)]
+        let native_device = self.webrender_surfman.native_device();
+
+        #[cfg(target_os = "windows")]
+        return NativeDisplay::Egl(native_device.egl_display as usize);
+
         #[cfg(target_os = "linux")]
-        {
-            if let Some(display) = self.gl_context.borrow().window().get_wayland_display() {
-                return NativeDisplay::Wayland(display as usize);
-            } else if let Some(display) =
-                self.gl_context.borrow().window().get_xlib_display()
-            {
-                return NativeDisplay::X11(display as usize);
-            }
-        }
+        return match native_connection {
+            NativeConnection::Default(NativeConnection::Default(conn)) =>
+                NativeDisplay::Egl(conn.0 as usize),
+            NativeConnection::Default(NativeConnection::Alternate(conn)) =>
+                NativeDisplay::X11(conn.x11_display as usize),
+            NativeConnection::Alternate(_) => unimplemented!(),
+        };
 
-        #[cfg(any(target_os = "linux", target_os = "windows"))]
-        {
-            if let Some(display) = self.gl_context.borrow().egl_display() {
-                return NativeDisplay::Egl(display as usize);
-            }
-        }
+        // @TODO(victor): https://github.com/servo/media/pull/315
+        #[cfg(target_os = "macos")]
+        #[allow(unreachable_code)]
+        return unimplemented!();
 
-        NativeDisplay::Unknown
+        #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+        return unimplemented!();
     }
 
     fn get_gl_api(&self) -> GlApi {
-        let api = self.gl_context.borrow().get_api();
-
-        let version = self.gl.get_string(gl::VERSION);
-        let version = version.trim_start_matches("OpenGL ES ");
-        let mut values = version.split(&['.', ' '][..]);
-        let major = values
-            .next()
-            .and_then(|v| v.parse::<u32>().ok())
-            .unwrap_or(1);
-        let minor = values
-            .next()
-            .and_then(|v| v.parse::<u32>().ok())
-            .unwrap_or(20);
-
+        let api = self.webrender_surfman.connection().gl_api();
+        let attributes = self.webrender_surfman.context_attributes();
+        let GLVersion { major, minor } = attributes.version;
         match api {
-            glutin::Api::OpenGl if major >= 3 && minor >= 2 => GlApi::OpenGL3,
-            glutin::Api::OpenGl => GlApi::OpenGL,
-            glutin::Api::OpenGlEs if major > 1 => GlApi::Gles2,
-            glutin::Api::OpenGlEs => GlApi::Gles1,
-            _ => GlApi::None,
+            GLApi::GL if major >= 3 && minor >= 2 => GlApi::OpenGL3,
+            GLApi::GL => GlApi::OpenGL,
+            GLApi::GLES if major > 1 => GlApi::Gles2,
+            GLApi::GLES => GlApi::Gles1,
         }
     }
 }

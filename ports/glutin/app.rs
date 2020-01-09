@@ -9,7 +9,7 @@ use crate::embedder::EmbedderCallbacks;
 use crate::events_loop::EventsLoop;
 use crate::window_trait::WindowPortsMethods;
 use crate::{headed_window, headless_window};
-use glutin::WindowId;
+use winit::WindowId;
 use servo::compositing::windowing::WindowEvent;
 use servo::config::opts::{self, parse_url_or_filename};
 use servo::servo_config::pref;
@@ -35,9 +35,6 @@ pub struct App {
 
 impl App {
     pub fn run(
-        angle: bool,
-        enable_vsync: bool,
-        use_msaa: bool,
         no_native_titlebar: bool,
         device_pixels_per_px: Option<f32>,
     ) {
@@ -49,11 +46,7 @@ impl App {
         } else {
             Rc::new(headed_window::Window::new(
                 opts::get().initial_window_size,
-                None,
                 events_loop.clone(),
-                angle,
-                enable_vsync,
-                use_msaa,
                 no_native_titlebar,
                 device_pixels_per_px,
             ))
@@ -61,10 +54,7 @@ impl App {
 
         // Implements embedder methods, used by libservo and constellation.
         let embedder = Box::new(EmbedderCallbacks::new(
-            window.clone(),
             events_loop.clone(),
-            window.gl(),
-            angle,
         ));
 
         // Handle browser state.
@@ -93,36 +83,36 @@ impl App {
     }
 
     // This function decides whether the event should be handled during `run_forever`.
-    fn winit_event_to_servo_event(&self, event: glutin::Event) -> glutin::ControlFlow {
+    fn winit_event_to_servo_event(&self, event: winit::Event) -> winit::ControlFlow {
         match event {
             // App level events
-            glutin::Event::Suspended(suspended) => {
+            winit::Event::Suspended(suspended) => {
                 self.suspended.set(suspended);
                 if !suspended {
                     self.event_queue.borrow_mut().push(WindowEvent::Idle);
                 }
             },
-            glutin::Event::Awakened => {
+            winit::Event::Awakened => {
                 self.event_queue.borrow_mut().push(WindowEvent::Idle);
             },
-            glutin::Event::DeviceEvent { .. } => {},
+            winit::Event::DeviceEvent { .. } => {},
 
             // Window level events
-            glutin::Event::WindowEvent {
+            winit::Event::WindowEvent {
                 window_id, event, ..
             } => {
                 return WINDOWS.with(|windows| {
                     match windows.borrow().get(&window_id) {
                         None => {
                             warn!("Got an event from unknown window");
-                            glutin::ControlFlow::Break
+                            winit::ControlFlow::Break
                         },
                         Some(window) => {
                             // Resize events need to be handled during run_forever
-                            let cont = if let glutin::WindowEvent::Resized(_) = event {
-                                glutin::ControlFlow::Continue
+                            let cont = if let winit::WindowEvent::Resized(_) = event {
+                                winit::ControlFlow::Continue
                             } else {
-                                glutin::ControlFlow::Break
+                                winit::ControlFlow::Break
                             };
                             window.winit_event_to_servo_event(event);
                             return cont;
@@ -131,7 +121,7 @@ impl App {
                 });
             },
         }
-        glutin::ControlFlow::Break
+        winit::ControlFlow::Break
     }
 
     fn run_loop(self) {
@@ -146,7 +136,7 @@ impl App {
                 // If there's no animations running then we block on the window event loop.
                 self.events_loop.borrow_mut().run_forever(|e| {
                     let cont = self.winit_event_to_servo_event(e);
-                    if cont == glutin::ControlFlow::Continue {
+                    if cont == winit::ControlFlow::Continue {
                         // Note we need to be careful to make sure that any events
                         // that are handled during run_forever aren't re-entrant,
                         // since we are handling them while holding onto a mutable borrow
@@ -236,15 +226,4 @@ pub fn register_window(window: Rc<dyn WindowPortsMethods>) {
     WINDOWS.with(|w| {
         w.borrow_mut().insert(window.id(), window);
     });
-}
-
-pub fn gl_version(angle: bool) -> glutin::GlRequest {
-    if angle {
-        glutin::GlRequest::Specific(glutin::Api::OpenGlEs, (3, 0))
-    } else {
-        glutin::GlRequest::GlThenGles {
-            opengl_version: (3, 2),
-            opengles_version: (3, 0),
-        }
-    }
 }
