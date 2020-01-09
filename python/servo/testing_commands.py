@@ -442,7 +442,6 @@ class MachCommands(CommandBase):
     # Helper for test_css and test_wpt:
     def wptrunner(self, run_file, **kwargs):
         self.set_software_rendering_env(kwargs['release'], kwargs['debugger'])
-
         # By default, Rayon selects the number of worker threads
         # based on the available CPU count. This doesn't work very
         # well when running tests on CI, since we run so many
