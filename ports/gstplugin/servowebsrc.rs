@@ -626,8 +626,8 @@ impl ServoWebSrc {
         // TODO: support other connections on linux?
         #[cfg(target_os = "linux")]
         {
-            use surfman::platform::unix::wayland;
             use surfman::platform::generic::multi;
+            use surfman::platform::unix::wayland;
             let native_connection = wayland::connection::NativeConnection::current()
                 .expect("Failed to bootstrap native connection");
             let wayland_connection = unsafe {
@@ -635,7 +635,7 @@ impl ServoWebSrc {
                     .expect("Failed to bootstrap wayland connection")
             };
             let connection = multi::connection::Connection::Default(
-                multi::connection::Connection::Default(wayland_connection)
+                multi::connection::Connection::Default(wayland_connection),
             );
             Some(connection)
         }
@@ -643,7 +643,8 @@ impl ServoWebSrc {
         {
             use surfman::connection::Connection as ConnectionAPI;
             type NativeConnection = <Connection as ConnectionAPI>::NativeConnection;
-            let native_connection = NativeConnection::current().expect("Failed to bootstrap native connection");
+            let native_connection =
+                NativeConnection::current().expect("Failed to bootstrap native connection");
             let connection = unsafe { Connection::from_native_connection(native_connection) }
                 .expect("Failed to bootstrap surfman connection");
             Some(connection)
@@ -701,14 +702,12 @@ impl ServoWebSrc {
                     .expect("Failed to bootstrap surfman device");
                 #[cfg(target_os = "linux")]
                 let native_context = {
-                    use surfman::platform::unix::wayland;
                     use surfman::platform::generic::multi;
-                    multi::context::NativeContext::Default(
-                        multi::context::NativeContext::Default(
-                            wayland::context::NativeContext::current()
-                                .expect("Failed to bootstrap native context")
-                        )
-                    )
+                    use surfman::platform::unix::wayland;
+                    multi::context::NativeContext::Default(multi::context::NativeContext::Default(
+                        wayland::context::NativeContext::current()
+                            .expect("Failed to bootstrap native context"),
+                    ))
                 };
                 #[cfg(not(target_os = "linux"))]
                 let native_context = {
