@@ -111,6 +111,10 @@ impl WindowPortsMethods for Window {
     fn winit_event_to_servo_event(&self, _event: winit::WindowEvent) {
         // Not expecting any winit events.
     }
+
+    fn new_glwindow(&self) -> Box<dyn webxr::glwindow::GlWindow> {
+        unimplemented!()
+    }
 }
 
 impl WindowMethods for Window {
@@ -154,7 +158,7 @@ impl WindowMethods for Window {
 }
 
 impl webxr::glwindow::GlWindow for Window {
-    fn create_native_widget(&self, _device: &Device) -> NativeWidget {
+    fn get_native_widget(&self, _device: &Device) -> NativeWidget {
         unimplemented!()
     }
 

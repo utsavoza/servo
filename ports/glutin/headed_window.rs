@@ -78,10 +78,9 @@ pub struct Window {
     last_pressed: Cell<Option<KeyboardEvent>>,
     animation_state: Cell<AnimationState>,
     fullscreen: Cell<bool>,
-    xr_rotation: Cell<Rotation3D<f32, UnknownUnit, UnknownUnit>>,
-    xr_translation: Cell<Vector3D<f32, UnknownUnit>>,
     no_native_titlebar: bool,
     device_pixels_per_px: Option<f32>,
+    xr_window_poses: RefCell<Vec<Rc<XRWindowPose>>>,
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -182,10 +181,9 @@ impl Window {
             inner_size: Cell::new(inner_size),
             primary_monitor,
             screen_size,
-            xr_rotation: Cell::new(Rotation3D::identity()),
-            xr_translation: Cell::new(Vector3D::zero()),
             no_native_titlebar,
             device_pixels_per_px,
+            xr_window_poses: RefCell::new(vec![]),
         }
     }
 
@@ -211,7 +209,10 @@ impl Window {
             KeyboardEvent::default()
         };
         event.key = Key::Character(ch.to_string());
-        self.handle_xr_translation(&event);
+        let xr_poses = self.xr_window_poses.borrow();
+        for xr_window_pose in &*xr_poses {
+            xr_window_pose.handle_xr_translation(&event);
+        }
         self.event_queue
             .borrow_mut()
             .push(WindowEvent::Keyboard(event));
@@ -224,61 +225,14 @@ impl Window {
             self.last_pressed.set(Some(event));
         } else if event.key != Key::Unidentified {
             self.last_pressed.set(None);
-            self.handle_xr_rotation(&input);
+            let xr_poses = self.xr_window_poses.borrow();
+            for xr_window_pose in &*xr_poses {
+                xr_window_pose.handle_xr_rotation(&input);
+            }
             self.event_queue
                 .borrow_mut()
                 .push(WindowEvent::Keyboard(event));
         }
-    }
-
-    fn handle_xr_translation(&self, input: &KeyboardEvent) {
-        if input.state != KeyState::Down {
-            return;
-        }
-        const NORMAL_TRANSLATE: f32 = 0.1;
-        const QUICK_TRANSLATE: f32 = 1.0;
-        let mut x = 0.0;
-        let mut z = 0.0;
-        match input.key {
-            Key::Character(ref k) => match &**k {
-                "w" => z = -NORMAL_TRANSLATE,
-                "W" => z = -QUICK_TRANSLATE,
-                "s" => z = NORMAL_TRANSLATE,
-                "S" => z = QUICK_TRANSLATE,
-                "a" => x = -NORMAL_TRANSLATE,
-                "A" => x = -QUICK_TRANSLATE,
-                "d" => x = NORMAL_TRANSLATE,
-                "D" => x = QUICK_TRANSLATE,
-                _ => return,
-            },
-            _ => return,
-        };
-        let (old_x, old_y, old_z) = self.xr_translation.get().to_tuple();
-        let vec = Vector3D::new(x + old_x, old_y, z + old_z);
-        self.xr_translation.set(vec);
-    }
-
-    fn handle_xr_rotation(&self, input: &KeyboardInput) {
-        if input.state != winit::ElementState::Pressed {
-            return;
-        }
-        let mut x = 0.0;
-        let mut y = 0.0;
-        match input.virtual_keycode {
-            Some(VirtualKeyCode::Up) => x = 1.0,
-            Some(VirtualKeyCode::Down) => x = -1.0,
-            Some(VirtualKeyCode::Left) => y = 1.0,
-            Some(VirtualKeyCode::Right) => y = -1.0,
-            _ => return,
-        };
-        if input.modifiers.shift {
-            x = 10.0 * x;
-            y = 10.0 * y;
-        }
-        let x: Rotation3D<_, UnknownUnit, UnknownUnit> = Rotation3D::around_x(Angle::degrees(x));
-        let y: Rotation3D<_, UnknownUnit, UnknownUnit> = Rotation3D::around_y(Angle::degrees(y));
-        let rotation = self.xr_rotation.get().post_rotate(&x).post_rotate(&y);
-        self.xr_rotation.set(rotation);
     }
 
     /// Helper function to handle a click
@@ -522,21 +476,15 @@ impl WindowPortsMethods for Window {
             _ => {},
         }
     }
-}
 
-impl webxr::glwindow::GlWindow for Window {
-    fn create_native_widget(&self, _device: &Device) -> NativeWidget {
-        // This is why we keep no_native_titlebar around
-        let _nntb = self.no_native_titlebar;
-        unimplemented!()
-    }
-
-    fn get_rotation(&self) -> Rotation3D<f32, UnknownUnit, UnknownUnit> {
-        self.xr_rotation.get().clone()
-    }
-
-    fn get_translation(&self) -> Vector3D<f32, UnknownUnit> {
-        self.xr_translation.get().clone()
+    fn new_glwindow(&self) -> Box<dyn webxr::glwindow::GlWindow> {
+        let winit_window = todo!();
+        let pose = Rc::new(XRWindowPose {
+            xr_rotation: Cell::new(Rotation3D::identity()),
+            xr_translation: Cell::new(Vector3D::zero()),
+        });
+        self.xr_window_poses.borrow_mut().push(pose);
+        Box::new(XRWindow { winit_window, pose })
     }
 }
 
@@ -678,4 +626,82 @@ fn load_icon(icon_bytes: &[u8]) -> Icon {
         (rgba, width, height)
     };
     Icon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to load icon")
+}
+
+struct XRWindow {
+    winit_window: winit::Window,
+    pose: Rc<XRWindowPose>,
+}
+
+struct XRWindowPose {
+    xr_rotation: Cell<Rotation3D<f32, UnknownUnit, UnknownUnit>>,
+    xr_translation: Cell<Vector3D<f32, UnknownUnit>>,
+}
+
+impl webxr::glwindow::GlWindow for XRWindow {
+    fn get_native_widget(&self, device: &Device) -> NativeWidget {
+        device.connection()
+            .create_native_widget_from_winit_window(&self.winit_window)
+            .expect("Failed to create native widget")
+    }
+
+    fn get_rotation(&self) -> Rotation3D<f32, UnknownUnit, UnknownUnit> {
+        self.pose.xr_rotation.get().clone()
+    }
+
+    fn get_translation(&self) -> Vector3D<f32, UnknownUnit> {
+        self.pose.xr_translation.get().clone()
+    }
+}
+
+impl XRWindowPose {
+    fn handle_xr_translation(&self, input: &KeyboardEvent) {
+        if input.state != KeyState::Down {
+            return;
+        }
+        const NORMAL_TRANSLATE: f32 = 0.1;
+        const QUICK_TRANSLATE: f32 = 1.0;
+        let mut x = 0.0;
+        let mut z = 0.0;
+        match input.key {
+            Key::Character(ref k) => match &**k {
+                "w" => z = -NORMAL_TRANSLATE,
+                "W" => z = -QUICK_TRANSLATE,
+                "s" => z = NORMAL_TRANSLATE,
+                "S" => z = QUICK_TRANSLATE,
+                "a" => x = -NORMAL_TRANSLATE,
+                "A" => x = -QUICK_TRANSLATE,
+                "d" => x = NORMAL_TRANSLATE,
+                "D" => x = QUICK_TRANSLATE,
+                _ => return,
+            },
+            _ => return,
+        };
+        let (old_x, old_y, old_z) = self.xr_translation.get().to_tuple();
+        let vec = Vector3D::new(x + old_x, old_y, z + old_z);
+        self.xr_translation.set(vec);
+    }
+
+    fn handle_xr_rotation(&self, input: &KeyboardInput) {
+        if input.state != winit::ElementState::Pressed {
+            return;
+        }
+        let mut x = 0.0;
+        let mut y = 0.0;
+        match input.virtual_keycode {
+            Some(VirtualKeyCode::Up) => x = 1.0,
+            Some(VirtualKeyCode::Down) => x = -1.0,
+            Some(VirtualKeyCode::Left) => y = 1.0,
+            Some(VirtualKeyCode::Right) => y = -1.0,
+            _ => return,
+        };
+        if input.modifiers.shift {
+            x = 10.0 * x;
+            y = 10.0 * y;
+        }
+        let x: Rotation3D<_, UnknownUnit, UnknownUnit> = Rotation3D::around_x(Angle::degrees(x));
+        let y: Rotation3D<_, UnknownUnit, UnknownUnit> = Rotation3D::around_y(Angle::degrees(y));
+        let rotation = self.xr_rotation.get().post_rotate(&x).post_rotate(&y);
+        self.xr_rotation.set(rotation);
+    }
 }

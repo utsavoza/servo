@@ -20,6 +20,7 @@ use std::collections::HashMap;
 use std::env;
 use std::mem;
 use std::rc::Rc;
+use webxr::glwindow::GlWindowDiscovery;
 
 thread_local! {
     pub static WINDOWS: RefCell<HashMap<WindowId, Rc<dyn WindowPortsMethods>>> = RefCell::new(HashMap::new());
@@ -52,9 +53,24 @@ impl App {
             ))
         };
 
+        let xr_discovery = if pref!(dom.webxr.glwindow) {
+            let window = window.clone();
+            let surfman = window.webrender_surfman();
+            let factory = Box::new(move || Ok(window.new_glwindow()));
+            Some(GlWindowDiscovery::new(
+                surfman.connection(),
+                surfman.adapter(),
+                surfman.context_attributes(),
+                factory,
+            ))
+        } else {
+            None
+        };
+
         // Implements embedder methods, used by libservo and constellation.
         let embedder = Box::new(EmbedderCallbacks::new(
             events_loop.clone(),
+            xr_discovery,
         ));
 
         // Handle browser state.

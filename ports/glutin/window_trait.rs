@@ -13,7 +13,7 @@ use servo::webrender_api::units::{DeviceIntPoint, DeviceIntSize};
 // This should vary by zoom level and maybe actual text size (focused or under cursor)
 pub const LINE_HEIGHT: f32 = 38.0;
 
-pub trait WindowPortsMethods: WindowMethods + webxr::glwindow::GlWindow {
+pub trait WindowPortsMethods: WindowMethods {
     fn get_events(&self) -> Vec<WindowEvent>;
     fn id(&self) -> winit::WindowId;
     fn has_events(&self) -> bool;
@@ -26,4 +26,5 @@ pub trait WindowPortsMethods: WindowMethods + webxr::glwindow::GlWindow {
     fn set_position(&self, _point: DeviceIntPoint) {}
     fn set_fullscreen(&self, _state: bool) {}
     fn set_cursor(&self, _cursor: Cursor) {}
+    fn new_glwindow(&self) -> Box<dyn webxr::glwindow::GlWindow>;
 }
