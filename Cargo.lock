@@ -6608,7 +6608,7 @@ dependencies = [
 [[package]]
 name = "webxr"
 version = "0.0.1"
-source = "git+https://github.com/asajeffrey/webxr?branch=surfmanup#1811e9f6406c88ba44f3d64bea16bc177f15c25b"
+source = "git+https://github.com/asajeffrey/webxr?branch=surfmanup#011fd42708aba6f4830d25d0361982fa92eadb82"
 dependencies = [
  "bindgen",
  "crossbeam-channel",
@@ -6630,7 +6630,7 @@ dependencies = [
 [[package]]
 name = "webxr-api"
 version = "0.0.1"
-source = "git+https://github.com/asajeffrey/webxr?branch=surfmanup#1811e9f6406c88ba44f3d64bea16bc177f15c25b"
+source = "git+https://github.com/asajeffrey/webxr?branch=surfmanup#011fd42708aba6f4830d25d0361982fa92eadb82"
 dependencies = [
  "euclid",
  "ipc-channel",
