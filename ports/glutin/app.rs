@@ -56,7 +56,8 @@ impl App {
         let xr_discovery = if pref!(dom.webxr.glwindow) {
             let window = window.clone();
             let surfman = window.webrender_surfman();
-            let factory = Box::new(move || Ok(window.new_glwindow()));
+            let events_loop = events_loop.clone();
+            let factory = Box::new(move || Ok(window.new_glwindow(&*events_loop.borrow())));
             Some(GlWindowDiscovery::new(
                 surfman.connection(),
                 surfman.adapter(),

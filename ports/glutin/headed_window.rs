@@ -78,7 +78,6 @@ pub struct Window {
     last_pressed: Cell<Option<KeyboardEvent>>,
     animation_state: Cell<AnimationState>,
     fullscreen: Cell<bool>,
-    no_native_titlebar: bool,
     device_pixels_per_px: Option<f32>,
     xr_window_poses: RefCell<Vec<Rc<XRWindowPose>>>,
 }
@@ -181,7 +180,6 @@ impl Window {
             inner_size: Cell::new(inner_size),
             primary_monitor,
             screen_size,
-            no_native_titlebar,
             device_pixels_per_px,
             xr_window_poses: RefCell::new(vec![]),
         }
@@ -477,13 +475,25 @@ impl WindowPortsMethods for Window {
         }
     }
 
-    fn new_glwindow(&self) -> Box<dyn webxr::glwindow::GlWindow> {
-        let winit_window = todo!();
+    fn new_glwindow(&self, events_loop: &EventsLoop) -> Box<dyn webxr::glwindow::GlWindow> {
+        let size = self.winit_window.get_outer_size()
+            .expect("Failed to get window outer size");
+
+        let mut window_builder = winit::WindowBuilder::new()
+            .with_title("Servo XR".to_string())
+            .with_dimensions(size)
+            .with_visibility(true);
+
+        window_builder = builder_with_platform_options(window_builder);
+
+        let winit_window = window_builder.build(events_loop.as_winit())
+            .expect("Failed to create window.");
+
         let pose = Rc::new(XRWindowPose {
             xr_rotation: Cell::new(Rotation3D::identity()),
             xr_translation: Cell::new(Vector3D::zero()),
         });
-        self.xr_window_poses.borrow_mut().push(pose);
+        self.xr_window_poses.borrow_mut().push(pose.clone());
         Box::new(XRWindow { winit_window, pose })
     }
 }

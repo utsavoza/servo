@@ -4,6 +4,7 @@
 
 //! A headless window implementation.
 
+use crate::events_loop::EventsLoop;
 use crate::window_trait::WindowPortsMethods;
 use euclid::{Point2D, Rotation3D, Scale, Size2D, UnknownUnit, Vector3D};
 use winit;
@@ -112,7 +113,7 @@ impl WindowPortsMethods for Window {
         // Not expecting any winit events.
     }
 
-    fn new_glwindow(&self) -> Box<dyn webxr::glwindow::GlWindow> {
+    fn new_glwindow(&self, _events_loop: &EventsLoop) -> Box<dyn webxr::glwindow::GlWindow> {
         unimplemented!()
     }
 }
