@@ -32,3 +32,20 @@ mio = { git = "https://github.com/servo/mio.git", branch = "servo" }
 winapi = { git = "https://github.com/servo/winapi-rs", branch = "patch-1" }
 spirv_cross = { git = "https://github.com/servo/spirv_cross", branch = "wgpu-servo" }
 backtrace = { git = "https://github.com/MeFisto94/backtrace-rs", branch = "fix-strtab-freeing-crash" }
+surfman-chains = { git = "https://github.com/asajeffrey/surfman-chains", branch = "multi" }
+# surfman-chains = { path = "../surfman-chains/surfman-chains" }
+surfman = { git = "https://github.com/asajeffrey/surfman", branch = "servo-surfmanup" }
+# surfman = { path = "../surfman/surfman" }
+
+[patch."https://github.com/pcwalton/surfman"]
+surfman = { git = "https://github.com/asajeffrey/surfman", branch = "servo-surfmanup" }
+# surfman = { path = "../surfman/surfman" }
+
+[patch."https://github.com/asajeffrey/surfman-chains"]
+# surfman-chains = { path = "../surfman-chains/surfman-chains" }
+
+[patch."https://github.com/servo/webxr"]
+webxr-api = {git = "https://github.com/asajeffrey/webxr", branch = "surfmanup"}
+webxr = {git = "https://github.com/asajeffrey/webxr", branch = "surfmanup"}
+# webxr-api = {path="../webxr/webxr-api"}
+# webxr = {path="../webxr/webxr"}

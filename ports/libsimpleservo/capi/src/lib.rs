@@ -28,6 +28,7 @@ use std::panic::{self, UnwindSafe};
 use std::slice;
 use std::str::FromStr;
 use std::sync::RwLock;
+use surfman::GLVersion;
 
 extern "C" fn default_panic_handler(msg: *const c_char) {
     let c_str: &CStr = unsafe { CStr::from_ptr(msg) };
@@ -203,8 +204,6 @@ where
 /// Callback used by Servo internals
 #[repr(C)]
 pub struct CHostCallbacks {
-    pub flush: extern "C" fn(),
-    pub make_current: extern "C" fn(),
     pub on_load_started: extern "C" fn(),
     pub on_load_ended: extern "C" fn(),
     pub on_title_changed: extern "C" fn(title: *const c_char),
@@ -243,6 +242,8 @@ pub struct CInitOptions {
     pub enable_subpixel_text_antialiasing: bool,
     pub vslogger_mod_list: *const *const c_char,
     pub vslogger_mod_size: u32,
+    pub gl_version: [u8; 2],
+    pub native_widget: *mut c_void,
 }
 
 #[repr(C)]
@@ -406,6 +407,12 @@ unsafe fn init(
 
     let coordinates = Coordinates::new(0, 0, opts.width, opts.height, opts.width, opts.height);
 
+    // TODO: get cbindgen to work on surfman types
+    let gl_version = GLVersion {
+        major: opts.gl_version[0],
+        minor: opts.gl_version[1],
+    };
+
     let opts = InitOptions {
         args,
         url,
@@ -420,6 +427,8 @@ unsafe fn init(
         enable_subpixel_text_antialiasing: opts.enable_subpixel_text_antialiasing,
         gl_context_pointer: gl_context,
         native_display_pointer: display,
+        gl_version,
+        native_widget: opts.native_widget,
     };
 
     let wakeup = Box::new(WakeupCallback::new(wakeup));
@@ -720,16 +729,6 @@ impl HostCallbacks {
 }
 
 impl HostTrait for HostCallbacks {
-    fn flush(&self) {
-        debug!("flush");
-        (self.0.flush)();
-    }
-
-    fn make_current(&self) {
-        debug!("make_current");
-        (self.0.make_current)();
-    }
-
     fn on_load_started(&self) {
         debug!("on_load_started");
         (self.0.on_load_started)();

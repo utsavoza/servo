@@ -4,6 +4,8 @@
 #include "Servo.h"
 #include "DefaultUrl.h"
 
+using namespace winrt::Windows::Foundation::Collections;
+
 namespace winrt::ServoApp::implementation {
 struct ServoControl : ServoControlT<ServoControl>, public servo::ServoDelegate {
 
@@ -100,8 +102,6 @@ struct ServoControl : ServoControlT<ServoControl>, public servo::ServoDelegate {
   virtual void OnServoShutdownComplete();
   virtual void OnServoTitleChanged(winrt::hstring);
   virtual void OnServoURLChanged(winrt::hstring);
-  virtual void Flush();
-  virtual void MakeCurrent();
   virtual bool OnServoAllowNavigation(winrt::hstring);
   virtual void OnServoAnimatingChanged(bool);
   virtual void OnServoIMEStateChanged(bool);
@@ -136,14 +136,16 @@ private:
              std::optional<hstring> secondaryButton,
              std::optional<hstring> input);
 
+  int mPanelHeight = 0;
+  int mPanelWidth = 0;
   float mDPI = 1;
   hstring mInitialURL = DEFAULT_URL;
   hstring mCurrentUrl = L"";
   bool mTransient = false;
 
   Windows::UI::Xaml::Controls::SwapChainPanel ServoControl::Panel();
-  void CreateRenderSurface();
-  void DestroyRenderSurface();
+  void CreateNativeWindow();
+  EGLNativeWindowType GetNativeWindow();
   void RecoverFromLostDevice();
 
   void StartRenderLoop();
@@ -190,7 +192,7 @@ private:
   void TryLoadUri(hstring);
 
   std::unique_ptr<servo::Servo> mServo;
-  EGLSurface mRenderSurface{EGL_NO_SURFACE};
+  PropertySet mNativeWindowProperties;
   OpenGLES mOpenGLES;
   bool mAnimating = false;
   bool mLooping = false;

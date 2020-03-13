@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Servo.h"
+#include <EGL/egl.h>
 
 namespace winrt::servo {
 
@@ -20,10 +21,6 @@ void on_title_changed(const char *title) {
 void on_url_changed(const char *url) {
   sServo->Delegate().OnServoURLChanged(char2hstring(url));
 }
-
-void flush() { sServo->Delegate().Flush(); }
-
-void make_current() { sServo->Delegate().MakeCurrent(); }
 
 void wakeup() { sServo->Delegate().WakeUp(); }
 
@@ -88,7 +85,8 @@ const char *prompt_input(const char *message, const char *default,
 }
 
 Servo::Servo(hstring url, hstring args, GLsizei width, GLsizei height,
-             float dpi, ServoDelegate &aDelegate)
+             EGLNativeWindowType eglNativeWindow, float dpi,
+             ServoDelegate &aDelegate)
     : mWindowHeight(height), mWindowWidth(width), mDelegate(aDelegate) {
 
   capi::CInitOptions o;
@@ -100,6 +98,9 @@ Servo::Servo(hstring url, hstring args, GLsizei width, GLsizei height,
   o.density = dpi;
   o.enable_subpixel_text_antialiasing = false;
   o.vr_pointer = NULL;
+  o.native_widget = eglNativeWindow;
+  o.gl_version[0] = 3;
+  o.gl_version[1] = 0;
 
   // 7 filter modules.
   /* Sample list of servo modules to filter.
@@ -127,8 +128,6 @@ Servo::Servo(hstring url, hstring args, GLsizei width, GLsizei height,
   sServo = this; // FIXME;
 
   capi::CHostCallbacks c;
-  c.flush = &flush;
-  c.make_current = &make_current;
   c.on_load_started = &on_load_started;
   c.on_load_ended = &on_load_ended;
   c.on_title_changed = &on_title_changed;
