@@ -428,6 +428,7 @@ where
                     },
                     renderer_kind: renderer_kind,
                     enable_subpixel_aa: opts.enable_subpixel_text_antialiasing,
+                    allow_texture_swizzling: pref!(gfx.texture_swizzling.enabled),
                     clear_color: None,
                     ..Default::default()
                 },

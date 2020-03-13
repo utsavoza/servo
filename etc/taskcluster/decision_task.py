@@ -575,12 +575,17 @@ def wpt_chunks(platform, make_chunk_task, build_task, total_chunks, processes,
         start = 1  # Skip the "extra" WPT testing, a.k.a. chunk 0
         name_prefix = "Layout 2020 "
         job_id_prefix = "2020-"
-        args = "--layout-2020"
+        args = ["--layout-2020"]
     else:
         start = 0
         name_prefix = ""
         job_id_prefix = ""
-        args = ""
+        args = []
+
+    # Our Mac CI runs on machines with an Intel 4000 GPU, so need to work around
+    # https://github.com/servo/webrender/wiki/Driver-issues#bug-1570736---texture-swizzling-affects-wrap-modes-on-some-intel-gpus
+    if platform == "macOS x64":
+        args += ["--pref gfx.texture-swizzling.enabled=false"]
 
     if chunks == "all":
         chunks = range(start, total_chunks + 1)
@@ -606,7 +611,7 @@ def wpt_chunks(platform, make_chunk_task, build_task, total_chunks, processes,
                 TOTAL_CHUNKS=str(total_chunks),
                 THIS_CHUNK=str(this_chunk),
                 PROCESSES=str(processes),
-                WPT_ARGS=args,
+                WPT_ARGS=" ".join(args),
                 GST_DEBUG="3",
             )
         )
