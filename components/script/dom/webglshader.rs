@@ -279,8 +279,23 @@ impl WebGLShader {
             },
         };
 
-        match validator.compile_and_translate(&[&source]) {
-            Ok(translated_source) => {
+        let options = mozangle::shaders::ffi::SH_VALIDATE |
+	              mozangle::shaders::ffi::SH_OBJECT_CODE |
+                      mozangle::shaders::ffi::SH_VARIABLES | // For uniform_name_map()
+                      mozangle::shaders::ffi::SH_EMULATE_ABS_INT_FUNCTION | // To workaround drivers
+                      mozangle::shaders::ffi::SH_EMULATE_ISNAN_FLOAT_FUNCTION | // To workaround drivers
+                      mozangle::shaders::ffi::SH_EMULATE_ATAN2_FLOAT_FUNCTION | // To workaround drivers
+                      mozangle::shaders::ffi::SH_CLAMP_INDIRECT_ARRAY_BOUNDS |
+                      mozangle::shaders::ffi::SH_INIT_GL_POSITION |
+                      mozangle::shaders::ffi::SH_ENFORCE_PACKING_RESTRICTIONS |
+                      mozangle::shaders::ffi::SH_LIMIT_EXPRESSION_COMPLEXITY |
+                      mozangle::shaders::ffi::SH_LIMIT_CALL_STACK_DEPTH |
+                      mozangle::shaders::ffi::SH_INITIALIZE_UNINITIALIZED_LOCALS |
+                      mozangle::shaders::ffi::SH_INIT_OUTPUT_VARIABLES;
+
+        match validator.compile(&[&source], options) {
+            Ok(()) => {
+                let translated_source = validator.object_code();
                 debug!("Shader translated: {}", translated_source);
                 // NOTE: At this point we should be pretty sure that the compilation in the paint thread
                 // will succeed.
