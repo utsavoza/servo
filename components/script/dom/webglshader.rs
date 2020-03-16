@@ -279,8 +279,33 @@ impl WebGLShader {
             },
         };
 
-        match validator.compile_and_translate(&[&source]) {
-            Ok(translated_source) => {
+        // Replicating https://searchfox.org/mozilla-central/rev/c621276fbdd9591f52009042d959b9e19b66d49f/dom/canvas/WebGLShaderValidator.cpp#32
+
+        let options = mozangle::shaders::ffi::SH_VARIABLES |
+            mozangle::shaders::ffi::SH_ENFORCE_PACKING_RESTRICTIONS |
+            mozangle::shaders::ffi::SH_OBJECT_CODE |
+            mozangle::shaders::ffi::SH_INIT_GL_POSITION |
+            mozangle::shaders::ffi::SH_INITIALIZE_UNINITIALIZED_LOCALS |
+            mozangle::shaders::ffi::SH_INIT_OUTPUT_VARIABLES |
+            if cfg!(target_os = "macos") {
+                // Work around https://bugs.webkit.org/show_bug.cgi?id=124684,
+                // https://chromium.googlesource.com/angle/angle/+/5e70cf9d0b1bb
+                mozangle::shaders::ffi::SH_UNFOLD_SHORT_CIRCUIT |
+                // Work around that Mac drivers handle struct scopes incorrectly.
+                mozangle::shaders::ffi::SH_REGENERATE_STRUCT_NAMES |
+                mozangle::shaders::ffi::SH_INIT_OUTPUT_VARIABLES |
+                // Work around that Intel drivers on Mac OSX handle for-loop incorrectly.
+                mozangle::shaders::ffi::SH_ADD_AND_TRUE_TO_LOOP_CONDITION
+            } else {
+                // We want to do this everywhere, but to do this on Mac, we need
+                // to do it only on Mac OSX > 10.6 as this causes the shader
+                // compiler in 10.6 to crash
+                mozangle::shaders::ffi::SH_CLAMP_INDIRECT_ARRAY_BOUNDS
+            };
+
+        match validator.compile(&[&source], options) {
+            Ok(()) => {
+                let translated_source = validator.object_code();
                 debug!("Shader translated: {}", translated_source);
                 // NOTE: At this point we should be pretty sure that the compilation in the paint thread
                 // will succeed.
