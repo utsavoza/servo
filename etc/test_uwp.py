@@ -63,7 +63,9 @@ def start_httpd(port):
     thread.start()
     return server, thread
 
-uninstall_cmd = 'Get-AppxPackage ' + app_name + '| Remove-AppxPackage'
+app_name = '$(Get-AppxPackage ' + app_name + ').Name'
+app_family = '$(Get-AppxPackage ' + app_name + '| select -expandproperty PackageFamilyName)'
+uninstall_cmd = '$(Get-AppxPackage ' + app_name + ')| Remove-AppxPackage'
 
 # Installing app
 # Uninstalling first. Just in case.
@@ -79,7 +81,7 @@ run_powershell_cmd_dont_fail(c2)
 run_powershell_cmd('Add-AppxPackage -Path ' + dep_file)
 run_powershell_cmd('Add-AppxPackage -Path ' + appx_file)
 # Allow app to connect to localhost
-checknetisolation = 'checknetisolation loopbackexempt {} -n="$(Get-AppxPackage -Name ' + app_name + ').Name"'
+checknetisolation = 'checknetisolation loopbackexempt {} -n="' + app_name + '"'
 run_powershell_cmd(checknetisolation.format('-a'))
 
 # HTTP Server
@@ -88,7 +90,9 @@ port = 56012
 http_server, http_thread = start_httpd(port)
 
 # Running Servo via its protocol handler
-run_powershell_cmd('start fxr://http://localhost:' + str(port))
+url = "http://localhost:" + str(port)
+
+run_powershell_cmd('Start-Process -ArgumentList ' + url + ' shell:AppsFolder\\' + app_family + '!App')
 
 http_thread.join(timeout=20)
 success = True
