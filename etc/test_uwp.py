@@ -21,7 +21,6 @@ from threading import Thread
 
 # Files
 app_name = 'MozillaFoundation.FirefoxReality'
-
 path = 'support\\hololens\\AppPackages\\ServoApp\\ServoApp_1.0.0.0_Debug_Test\\'
 appx_file = os.getcwd() + '\\' + path + 'ServoApp_1.0.0.0_x64_Debug.msixbundle'
 dep_file = os.getcwd() + '\\' + path + 'Dependencies\\x64\\Microsoft.VCLibs.x64.Debug.14.00.appx'
@@ -63,7 +62,6 @@ def start_httpd(port):
     thread.start()
     return server, thread
 
-app_name = '$(Get-AppxPackage ' + app_name + ').Name'
 app_family = '$(Get-AppxPackage ' + app_name + '| select -expandproperty PackageFamilyName)'
 uninstall_cmd = '$(Get-AppxPackage ' + app_name + ')| Remove-AppxPackage'
 
@@ -81,7 +79,7 @@ run_powershell_cmd_dont_fail(c2)
 run_powershell_cmd('Add-AppxPackage -Path ' + dep_file)
 run_powershell_cmd('Add-AppxPackage -Path ' + appx_file)
 # Allow app to connect to localhost
-checknetisolation = 'checknetisolation loopbackexempt {} -n="' + app_name + '"'
+checknetisolation = 'checknetisolation loopbackexempt {} -n="' + app_family + '"'
 run_powershell_cmd(checknetisolation.format('-a'))
 
 # HTTP Server
