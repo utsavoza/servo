@@ -195,7 +195,7 @@ class PackageCommands(CommandBase):
              description='Package Servo',
              category='package')
     def package_pre_check(self):
-        setup_uwp_signing(False, True)
+        setup_uwp_signing(False)
 
     @Command('package',
              description='Package Servo',
