@@ -45,9 +45,11 @@ def tasks(task_for):
             "try": all_tests,
             "try-taskcluster": [
                 # Add functions here as needed, in your push to that branch
+                layout_2020_regressions_report
             ],
             "master": [
                 upload_docs,
+                layout_2020_regressions_report,
             ],
 
             # The "try-*" keys match those in `servo_try_choosers` in Homu’s config:
@@ -246,6 +248,29 @@ def upload_docs():
         .create()
     )
 
+
+def layout_2020_regressions_report():
+
+
+
+    CONFIG._tree_hash = "23c37eb682f5a43cd906680b62ac3622e981b6fc" # FIXME do not merge
+
+
+
+
+    return (
+        linux_task("Layout 2020 regressions report")
+        .with_treeherder("Linux x64", "RegressionsReport")
+        .with_dockerfile(dockerfile_path("base"))
+        .with_repo_bundle()
+        .with_script(
+            "python3 etc/layout-2020-regressions/gen.py %s %s"
+            % (CONFIG.tree_hash(), CONFIG.git_sha)
+        )
+        .with_index_and_artifacts_expire_in(log_artifacts_expire_in)
+        .with_artifacts("/repo/etc/layout-2020-regressions/regressions.html")
+        .find_or_create("layout-2020-regressions-report")
+    )
 
 def macos_unit():
     return (
