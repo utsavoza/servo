@@ -30,6 +30,11 @@ Write-Output "PAUL: LIST OF LOCALHOST-ALLOWED APPS BEFORE INSTALLATION -----"
 CheckNetIsolation LoopbackExempt -a -n="$fam"
 CheckNetIsolation LoopbackExempt -s
 
+# $app_dir = Get-AppxPackage MozillaFoundation.FirefoxReality | select -expandproperty InstallLocation
+# $dumpbin = 'C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Tools\MSVC\14.16.27023\bin\Hostx64\x64\dumpbin.exe'
+# # $dumpbin = 'C:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\VC\Tools\MSVC\14.16.27023\bin\Hostx64\x64\dumpbin.exe'
+# & $dumpbin /DEPENDENTS $app_dir\ServoApp.exe
+
 Write-Output "PAUL: START PROCESS -----"
 Start-Process -ArgumentList "http://localhost:56012" shell:AppsFolder\$fam!App
 # start "fxr://http://example.com"
