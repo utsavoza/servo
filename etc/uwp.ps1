@@ -40,7 +40,12 @@ Start-Process -ArgumentList "http://localhost:56012" shell:AppsFolder\$fam!App
 # start "fxr://http://example.com"
 
 Write-Output "PAUL: SLEEP -----"
-Start-Sleep -seconds 15
+Start-Sleep -seconds 5
+
+Write-Output "PAUL: System logs -----"
+Get-EventLog System
+Write-Output "PAUL: Application logs -----"
+Get-EventLog Application
 
 Write-Output "PAUL: FIND PROCESS -----"
 Get-Process ServoApp  | Format-List *
