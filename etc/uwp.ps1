@@ -43,9 +43,11 @@ Write-Output "PAUL: SLEEP -----"
 Start-Sleep -seconds 5
 
 Write-Output "PAUL: System logs -----"
-Get-EventLog System
-Write-Output "PAUL: Application logs -----"
-Get-EventLog Application
+# Get-EventLog System
+Get-WinEvent -FilterHashtable @{LogName="System"; StartTime=(get-date).AddHours(-3)}
+# Write-Output "PAUL: Application logs -----"
+# Get-EventLog Application
+
 
 Write-Output "PAUL: FIND PROCESS -----"
 Get-Process ServoApp  | Format-List *
