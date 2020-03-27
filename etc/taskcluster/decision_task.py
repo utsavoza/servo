@@ -56,7 +56,7 @@ def tasks(task_for):
 
             "try-mac": [macos_unit],
             "try-linux": [linux_tidy_unit, linux_docs_check, linux_release],
-            "try-windows": [windows_unit, windows_arm64, windows_uwp_x64],
+            "try-windows": [windows_uwp_x64],
             "try-arm": [windows_arm64],
             "try-wpt": [linux_wpt],
             "try-wpt-2020": [linux_wpt_layout_2020],
@@ -329,9 +329,7 @@ def windows_uwp_x64():
         .with_features("taskclusterProxy")
         .with_scopes("secrets:get:project/servo/windows-codesign-cert/latest")
         .with_script(
-            "python mach build --dev --target=x86_64-uwp-windows-msvc",
-            "python mach package --dev --target=x86_64-uwp-windows-msvc --uwp=x64",
-            "python mach test-tidy --force-cpp --no-wpt",
+            "powershell ./etc/uwp.ps1",
         )
         .with_artifacts(appx_artifact(debug=True))
         .find_or_create("build.windows_uwp_x64_dev." + CONFIG.tree_hash())
