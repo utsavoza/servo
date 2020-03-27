@@ -487,9 +487,7 @@ def macos_release_build_with_debug_assertions(priority=None):
             "./etc/ci/lockfile_changed.sh",
             "tar -czf target.tar.gz" +
             " target/release/servo" +
-            " target/release/build/osmesa-src-*/output" +
-            " target/release/build/osmesa-src-*/out/src/gallium/targets/osmesa/.libs" +
-            " target/release/build/osmesa-src-*/out/src/mapi/shared-glapi/.libs",
+            " resources",
         ]))
         .with_artifacts("repo/target.tar.gz")
         .find_or_create("build.macos_x64_release_w_assertions." + CONFIG.tree_hash())
@@ -517,8 +515,7 @@ def linux_release_build_with_debug_assertions(layout_2020):
             ./etc/ci/lockfile_changed.sh
             tar -czf /target.tar.gz \
                 target/release/servo \
-                target/release/build/osmesa-src-*/output \
-                target/release/build/osmesa-src-*/out/lib/gallium
+                resources
             sccache --show-stats
         """ % build_args)
         .with_artifacts("/target.tar.gz")
@@ -568,12 +565,17 @@ def wpt_chunks(platform, make_chunk_task, build_task, total_chunks, processes,
         start = 1  # Skip the "extra" WPT testing, a.k.a. chunk 0
         name_prefix = "Layout 2020 "
         job_id_prefix = "2020-"
-        args = "--layout-2020"
+        args = ["--layout-2020"]
     else:
         start = 0
         name_prefix = ""
         job_id_prefix = ""
-        args = ""
+        args = []
+
+    # Our Mac CI runs on machines with an Intel 4000 GPU, so need to work around
+    # https://github.com/servo/webrender/wiki/Driver-issues#bug-1570736---texture-swizzling-affects-wrap-modes-on-some-intel-gpus
+    if platform == "macOS x64":
+        args += ["--pref gfx.texture-swizzling.enabled=false"]
 
     if chunks == "all":
         chunks = range(start, total_chunks + 1)
@@ -599,7 +601,7 @@ def wpt_chunks(platform, make_chunk_task, build_task, total_chunks, processes,
                 TOTAL_CHUNKS=str(total_chunks),
                 THIS_CHUNK=str(this_chunk),
                 PROCESSES=str(processes),
-                WPT_ARGS=args,
+                WPT_ARGS=" ".join(args),
                 GST_DEBUG="3",
             )
         )

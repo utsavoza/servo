@@ -69,6 +69,8 @@ def setlocale(name):
 def find_dep_path_newest(package, bin_path):
     deps_path = path.join(path.split(bin_path)[0], "build")
     candidates = []
+    if not os.path.exists(deps_path):
+        return None
     with cd(deps_path):
         for c in glob(package + '-*'):
             candidate_path = path.join(deps_path, c)
