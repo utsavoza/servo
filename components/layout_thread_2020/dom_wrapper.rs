@@ -187,7 +187,7 @@ impl<'lr> TShadowRoot for ServoShadowRoot<'lr> {
         Some(unsafe {
             &self
                 .shadow_root
-                .get_style_data_for_layout::<ServoLayoutElement>()
+                .get_style_data_for_layout()
                 .data
         })
     }
