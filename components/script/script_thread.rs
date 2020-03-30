@@ -2908,6 +2908,9 @@ impl ScriptThread {
             .as_ref()
             .map(|bhm| bhm.unregister());
 
+        debug!("Exiting IPC router thread in script thread.");
+        ROUTER.shutdown();
+
         debug!("Exited script thread.");
     }
 
