@@ -27,7 +27,6 @@ use dom_struct::dom_struct;
 use euclid::default::{Point2D, Rect, Size2D};
 use ipc_channel::ipc::IpcSender;
 use servo_url::ServoUrl;
-use std::mem;
 
 // https://html.spec.whatwg.org/multipage/#canvasrenderingcontext2d
 #[dom_struct]
@@ -108,14 +107,7 @@ impl CanvasRenderingContext2D {
     }
 
     pub fn take_missing_image_urls(&self) -> Vec<ServoUrl> {
-        mem::replace(
-            &mut self
-                .canvas_state
-                .borrow()
-                .get_missing_image_urls()
-                .borrow_mut(),
-            vec![],
-        )
+        self.canvas_state.borrow_mut().take_missing_image_urls()
     }
 
     pub fn get_canvas_id(&self) -> CanvasId {
@@ -576,7 +568,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
         repetition: DOMString,
     ) -> Fallible<Option<DomRoot<CanvasPattern>>> {
         self.canvas_state
-            .borrow()
+            .borrow_mut()
             .create_pattern(&self.global(), image, repetition)
     }
 

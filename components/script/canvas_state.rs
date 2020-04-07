@@ -51,6 +51,7 @@ use script_traits::ScriptMsg;
 use serde_bytes::ByteBuf;
 use servo_url::{ImmutableOrigin, ServoUrl};
 use std::fmt;
+use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -129,7 +130,7 @@ pub(crate) struct CanvasState {
     base_url: ServoUrl,
     origin: ImmutableOrigin,
     /// Any missing image URLs.
-    missing_image_urls: DomRefCell<Vec<ServoUrl>>,
+    missing_image_urls: Vec<ServoUrl>,
     saved_states: DomRefCell<Vec<CanvasContextState>>,
 }
 
@@ -160,7 +161,7 @@ impl CanvasState {
             origin_clean: true,
             image_cache: global.image_cache(),
             base_url: global.api_base_url(),
-            missing_image_urls: DomRefCell::new(Vec::new()),
+            missing_image_urls: Vec::new(),
             saved_states: DomRefCell::new(Vec::new()),
             origin,
         }
@@ -170,8 +171,8 @@ impl CanvasState {
         &self.ipc_renderer
     }
 
-    pub fn get_missing_image_urls(&self) -> &DomRefCell<Vec<ServoUrl>> {
-        &self.missing_image_urls
+    pub fn take_missing_image_urls(&mut self) -> Vec<ServoUrl> {
+        mem::replace(&mut self.missing_image_urls, vec![])
     }
 
     pub fn get_state(&self) -> &DomRefCell<CanvasContextState> {
@@ -241,7 +242,7 @@ impl CanvasState {
     }
 
     fn fetch_image_data(
-        &self,
+        &mut self,
         url: ServoUrl,
         cors_setting: Option<CorsSettings>,
     ) -> Option<(Vec<u8>, Size2D<u32>)> {
@@ -264,7 +265,7 @@ impl CanvasState {
     }
 
     fn request_image_from_cache(
-        &self,
+        &mut self,
         url: ServoUrl,
         cors_setting: Option<CorsSettings>,
     ) -> ImageResponse {
@@ -283,7 +284,7 @@ impl CanvasState {
             _ => {
                 // Rather annoyingly, we get the same response back from
                 // A load which really failed and from a load which hasn't started yet.
-                self.missing_image_urls.borrow_mut().push(url);
+                self.missing_image_urls.push(url);
                 ImageResponse::None
             },
         }
@@ -559,7 +560,7 @@ impl CanvasState {
     }
 
     fn fetch_and_draw_image_data(
-        &self,
+        &mut self,
         canvas: Option<&HTMLCanvasElement>,
         url: ServoUrl,
         cors_setting: Option<CorsSettings>,
@@ -890,7 +891,7 @@ impl CanvasState {
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-createpattern
     pub fn create_pattern(
-        &self,
+        &mut self,
         global: &GlobalScope,
         image: CanvasImageSource,
         mut repetition: DOMString,
