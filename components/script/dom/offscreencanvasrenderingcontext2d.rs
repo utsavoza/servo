@@ -157,7 +157,7 @@ impl OffscreenCanvasRenderingContext2DMethods for OffscreenCanvasRenderingContex
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-strokestyle
     fn SetStrokeStyle(&self, value: StringOrCanvasGradientOrCanvasPattern) {
         self.canvas_state
-            .borrow()
+            .borrow_mut()
             .set_stroke_style(self.htmlcanvas.as_ref().map(|c| &**c), value)
     }
 
@@ -169,7 +169,7 @@ impl OffscreenCanvasRenderingContext2DMethods for OffscreenCanvasRenderingContex
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-strokestyle
     fn SetFillStyle(&self, value: StringOrCanvasGradientOrCanvasPattern) {
         self.canvas_state
-            .borrow()
+            .borrow_mut()
             .set_fill_style(self.htmlcanvas.as_ref().map(|c| &**c), value)
     }
 
@@ -368,9 +368,12 @@ impl OffscreenCanvasRenderingContext2DMethods for OffscreenCanvasRenderingContex
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-drawimage
     fn DrawImage(&self, image: CanvasImageSource, dx: f64, dy: f64) -> ErrorResult {
-        self.canvas_state
-            .borrow()
-            .draw_image(self.htmlcanvas.as_ref().map(|c| &**c), image, dx, dy)
+        self.canvas_state.borrow_mut().draw_image(
+            self.htmlcanvas.as_ref().map(|c| &**c),
+            image,
+            dx,
+            dy,
+        )
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-drawimage
@@ -382,7 +385,7 @@ impl OffscreenCanvasRenderingContext2DMethods for OffscreenCanvasRenderingContex
         dw: f64,
         dh: f64,
     ) -> ErrorResult {
-        self.canvas_state.borrow().draw_image_(
+        self.canvas_state.borrow_mut().draw_image_(
             self.htmlcanvas.as_ref().map(|c| &**c),
             image,
             dx,
@@ -405,7 +408,7 @@ impl OffscreenCanvasRenderingContext2DMethods for OffscreenCanvasRenderingContex
         dw: f64,
         dh: f64,
     ) -> ErrorResult {
-        self.canvas_state.borrow().draw_image__(
+        self.canvas_state.borrow_mut().draw_image__(
             self.htmlcanvas.as_ref().map(|c| &**c),
             image,
             sx,

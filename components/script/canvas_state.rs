@@ -50,7 +50,6 @@ use profile_traits::ipc as profiled_ipc;
 use script_traits::ScriptMsg;
 use serde_bytes::ByteBuf;
 use servo_url::{ImmutableOrigin, ServoUrl};
-use std::cell::Cell;
 use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -122,7 +121,7 @@ pub(crate) struct CanvasState {
     ipc_renderer: IpcSender<CanvasMsg>,
     canvas_id: CanvasId,
     state: DomRefCell<CanvasContextState>,
-    origin_clean: Cell<bool>,
+    origin_clean: bool,
     #[ignore_malloc_size_of = "Arc"]
     image_cache: Arc<dyn ImageCache>,
     /// The base URL for resolving CSS image URL values.
@@ -158,7 +157,7 @@ impl CanvasState {
             ipc_renderer: ipc_renderer,
             canvas_id: canvas_id,
             state: DomRefCell::new(CanvasContextState::new()),
-            origin_clean: Cell::new(true),
+            origin_clean: true,
             image_cache: global.image_cache(),
             base_url: global.api_base_url(),
             missing_image_urls: DomRefCell::new(Vec::new()),
@@ -222,11 +221,11 @@ impl CanvasState {
     }
 
     pub fn origin_is_clean(&self) -> bool {
-        self.origin_clean.get()
+        self.origin_clean
     }
 
-    fn set_origin_unclean(&self) {
-        self.origin_clean.set(false)
+    fn set_origin_unclean(&mut self) {
+        self.origin_clean = false;
     }
 
     // https://html.spec.whatwg.org/multipage/#the-image-argument-is-not-origin-clean
@@ -368,7 +367,7 @@ impl CanvasState {
     //
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-drawimage
     fn draw_image_internal(
-        &self,
+        &mut self,
         htmlcanvas: Option<&HTMLCanvasElement>,
         image: CanvasImageSource,
         sx: f64,
@@ -778,7 +777,7 @@ impl CanvasState {
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-strokestyle
     pub fn set_stroke_style(
-        &self,
+        &mut self,
         canvas: Option<&HTMLCanvasElement>,
         value: StringOrCanvasGradientOrCanvasPattern,
     ) {
@@ -821,7 +820,7 @@ impl CanvasState {
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-strokestyle
     pub fn set_fill_style(
-        &self,
+        &mut self,
         canvas: Option<&HTMLCanvasElement>,
         value: StringOrCanvasGradientOrCanvasPattern,
     ) {
@@ -1228,7 +1227,7 @@ impl CanvasState {
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-drawimage
     pub fn draw_image(
-        &self,
+        &mut self,
         canvas: Option<&HTMLCanvasElement>,
         image: CanvasImageSource,
         dx: f64,
@@ -1243,7 +1242,7 @@ impl CanvasState {
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-drawimage
     pub fn draw_image_(
-        &self,
+        &mut self,
         canvas: Option<&HTMLCanvasElement>,
         image: CanvasImageSource,
         dx: f64,
@@ -1271,7 +1270,7 @@ impl CanvasState {
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-drawimage
     pub fn draw_image__(
-        &self,
+        &mut self,
         canvas: Option<&HTMLCanvasElement>,
         image: CanvasImageSource,
         sx: f64,

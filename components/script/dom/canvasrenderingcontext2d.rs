@@ -332,7 +332,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-drawimage
     fn DrawImage(&self, image: CanvasImageSource, dx: f64, dy: f64) -> ErrorResult {
         self.canvas_state
-            .borrow()
+            .borrow_mut()
             .draw_image(self.canvas.as_ref().map(|c| &**c), image, dx, dy)
     }
 
@@ -345,7 +345,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
         dw: f64,
         dh: f64,
     ) -> ErrorResult {
-        self.canvas_state.borrow().draw_image_(
+        self.canvas_state.borrow_mut().draw_image_(
             self.canvas.as_ref().map(|c| &**c),
             image,
             dx,
@@ -368,7 +368,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
         dw: f64,
         dh: f64,
     ) -> ErrorResult {
-        self.canvas_state.borrow().draw_image__(
+        self.canvas_state.borrow_mut().draw_image__(
             self.canvas.as_ref().map(|c| &**c),
             image,
             sx,
@@ -458,7 +458,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-strokestyle
     fn SetStrokeStyle(&self, value: StringOrCanvasGradientOrCanvasPattern) {
         self.canvas_state
-            .borrow()
+            .borrow_mut()
             .set_stroke_style(self.canvas.as_ref().map(|c| &**c), value)
     }
 
@@ -470,7 +470,7 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-strokestyle
     fn SetFillStyle(&self, value: StringOrCanvasGradientOrCanvasPattern) {
         self.canvas_state
-            .borrow()
+            .borrow_mut()
             .set_fill_style(self.canvas.as_ref().map(|c| &**c), value)
     }
 
