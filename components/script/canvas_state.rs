@@ -2,7 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::dom::bindings::cell::DomRefCell;
 use crate::dom::bindings::codegen::Bindings::CanvasRenderingContext2DBinding::CanvasFillRule;
 use crate::dom::bindings::codegen::Bindings::CanvasRenderingContext2DBinding::CanvasImageSource;
 use crate::dom::bindings::codegen::Bindings::CanvasRenderingContext2DBinding::CanvasLineCap;
@@ -121,7 +120,7 @@ pub(crate) struct CanvasState {
     #[ignore_malloc_size_of = "Defined in ipc-channel"]
     ipc_renderer: IpcSender<CanvasMsg>,
     canvas_id: CanvasId,
-    state: DomRefCell<CanvasContextState>,
+    state: CanvasContextState,
     origin_clean: bool,
     #[ignore_malloc_size_of = "Arc"]
     image_cache: Arc<dyn ImageCache>,
@@ -157,7 +156,7 @@ impl CanvasState {
         CanvasState {
             ipc_renderer: ipc_renderer,
             canvas_id: canvas_id,
-            state: DomRefCell::new(CanvasContextState::new()),
+            state: CanvasContextState::new(),
             origin_clean: true,
             image_cache: global.image_cache(),
             base_url: global.api_base_url(),
@@ -195,7 +194,7 @@ impl CanvasState {
 
     pub fn reset_to_initial_state(&mut self) {
         self.saved_states.clear();
-        *self.state.borrow_mut() = CanvasContextState::new();
+        self.state = CanvasContextState::new();
     }
 
     fn create_drawable_rect(&self, x: f64, y: f64, w: f64, h: f64) -> Option<Rect<f32>> {
@@ -461,7 +460,7 @@ impl CanvasState {
             return Ok(());
         }
 
-        let smoothing_enabled = self.state.borrow().image_smoothing_enabled;
+        let smoothing_enabled = self.state.image_smoothing_enabled;
 
         if let Some(context) = canvas.context() {
             match *context {
@@ -522,7 +521,7 @@ impl CanvasState {
             return Ok(());
         }
 
-        let smoothing_enabled = self.state.borrow().image_smoothing_enabled;
+        let smoothing_enabled = self.state.image_smoothing_enabled;
 
         if let Some(context) = canvas.context() {
             match *context {
@@ -585,7 +584,7 @@ impl CanvasState {
             return Ok(());
         }
 
-        let smoothing_enabled = self.state.borrow().image_smoothing_enabled;
+        let smoothing_enabled = self.state.image_smoothing_enabled;
         self.send_canvas_2d_msg(Canvas2dMsg::DrawImage(
             Some(ByteBuf::from(image_data)),
             image_size,
@@ -668,13 +667,13 @@ impl CanvasState {
     }
 
     fn update_transform(&self) {
-        self.send_canvas_2d_msg(Canvas2dMsg::SetTransform(self.state.borrow().transform))
+        self.send_canvas_2d_msg(Canvas2dMsg::SetTransform(self.state.transform))
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-fillrect
     pub fn fill_rect(&self, x: f64, y: f64, width: f64, height: f64) {
         if let Some(rect) = self.create_drawable_rect(x, y, width, height) {
-            let style = self.state.borrow().fill_style.to_fill_or_stroke_style();
+            let style = self.state.fill_style.to_fill_or_stroke_style();
             self.send_canvas_2d_msg(Canvas2dMsg::FillRect(rect, style));
         }
     }
@@ -689,71 +688,71 @@ impl CanvasState {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-strokerect
     pub fn stroke_rect(&self, x: f64, y: f64, width: f64, height: f64) {
         if let Some(rect) = self.create_drawable_rect(x, y, width, height) {
-            let style = self.state.borrow().stroke_style.to_fill_or_stroke_style();
+            let style = self.state.stroke_style.to_fill_or_stroke_style();
             self.send_canvas_2d_msg(Canvas2dMsg::StrokeRect(rect, style));
         }
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowoffsetx
     pub fn shadow_offset_x(&self) -> f64 {
-        self.state.borrow().shadow_offset_x
+        self.state.shadow_offset_x
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowoffsetx
-    pub fn set_shadow_offset_x(&self, value: f64) {
-        if !value.is_finite() || value == self.state.borrow().shadow_offset_x {
+    pub fn set_shadow_offset_x(&mut self, value: f64) {
+        if !value.is_finite() || value == self.state.shadow_offset_x {
             return;
         }
-        self.state.borrow_mut().shadow_offset_x = value;
+        self.state.shadow_offset_x = value;
         self.send_canvas_2d_msg(Canvas2dMsg::SetShadowOffsetX(value))
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowoffsety
     pub fn shadow_offset_y(&self) -> f64 {
-        self.state.borrow().shadow_offset_y
+        self.state.shadow_offset_y
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowoffsety
-    pub fn set_shadow_offset_y(&self, value: f64) {
-        if !value.is_finite() || value == self.state.borrow().shadow_offset_y {
+    pub fn set_shadow_offset_y(&mut self, value: f64) {
+        if !value.is_finite() || value == self.state.shadow_offset_y {
             return;
         }
-        self.state.borrow_mut().shadow_offset_y = value;
+        self.state.shadow_offset_y = value;
         self.send_canvas_2d_msg(Canvas2dMsg::SetShadowOffsetY(value))
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowblur
     pub fn shadow_blur(&self) -> f64 {
-        self.state.borrow().shadow_blur
+        self.state.shadow_blur
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowblur
-    pub fn set_shadow_blur(&self, value: f64) {
-        if !value.is_finite() || value < 0f64 || value == self.state.borrow().shadow_blur {
+    pub fn set_shadow_blur(&mut self, value: f64) {
+        if !value.is_finite() || value < 0f64 || value == self.state.shadow_blur {
             return;
         }
-        self.state.borrow_mut().shadow_blur = value;
+        self.state.shadow_blur = value;
         self.send_canvas_2d_msg(Canvas2dMsg::SetShadowBlur(value))
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowcolor
     pub fn shadow_color(&self) -> DOMString {
         let mut result = String::new();
-        serialize(&self.state.borrow().shadow_color, &mut result).unwrap();
+        serialize(&self.state.shadow_color, &mut result).unwrap();
         DOMString::from(result)
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-shadowcolor
-    pub fn set_shadow_color(&self, value: DOMString) {
+    pub fn set_shadow_color(&mut self, value: DOMString) {
         if let Ok(color) = parse_color(&value) {
-            self.state.borrow_mut().shadow_color = color;
+            self.state.shadow_color = color;
             self.send_canvas_2d_msg(Canvas2dMsg::SetShadowColor(color))
         }
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-strokestyle
     pub fn stroke_style(&self) -> StringOrCanvasGradientOrCanvasPattern {
-        match self.state.borrow().stroke_style {
+        match self.state.stroke_style {
             CanvasFillOrStrokeStyle::Color(ref rgba) => {
                 let mut result = String::new();
                 serialize(rgba, &mut result).unwrap();
@@ -777,15 +776,15 @@ impl CanvasState {
         match value {
             StringOrCanvasGradientOrCanvasPattern::String(string) => {
                 if let Ok(rgba) = self.parse_color(canvas, &string) {
-                    self.state.borrow_mut().stroke_style = CanvasFillOrStrokeStyle::Color(rgba);
+                    self.state.stroke_style = CanvasFillOrStrokeStyle::Color(rgba);
                 }
             },
             StringOrCanvasGradientOrCanvasPattern::CanvasGradient(gradient) => {
-                self.state.borrow_mut().stroke_style =
+                self.state.stroke_style =
                     CanvasFillOrStrokeStyle::Gradient(Dom::from_ref(&*gradient));
             },
             StringOrCanvasGradientOrCanvasPattern::CanvasPattern(pattern) => {
-                self.state.borrow_mut().stroke_style =
+                self.state.stroke_style =
                     CanvasFillOrStrokeStyle::Pattern(Dom::from_ref(&*pattern));
                 if !pattern.origin_is_clean() {
                     self.set_origin_unclean();
@@ -796,7 +795,7 @@ impl CanvasState {
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-strokestyle
     pub fn fill_style(&self) -> StringOrCanvasGradientOrCanvasPattern {
-        match self.state.borrow().fill_style {
+        match self.state.fill_style {
             CanvasFillOrStrokeStyle::Color(ref rgba) => {
                 let mut result = String::new();
                 serialize(rgba, &mut result).unwrap();
@@ -820,16 +819,15 @@ impl CanvasState {
         match value {
             StringOrCanvasGradientOrCanvasPattern::String(string) => {
                 if let Ok(rgba) = self.parse_color(canvas, &string) {
-                    self.state.borrow_mut().fill_style = CanvasFillOrStrokeStyle::Color(rgba);
+                    self.state.fill_style = CanvasFillOrStrokeStyle::Color(rgba);
                 }
             },
             StringOrCanvasGradientOrCanvasPattern::CanvasGradient(gradient) => {
-                self.state.borrow_mut().fill_style =
+                self.state.fill_style =
                     CanvasFillOrStrokeStyle::Gradient(Dom::from_ref(&*gradient));
             },
             StringOrCanvasGradientOrCanvasPattern::CanvasPattern(pattern) => {
-                self.state.borrow_mut().fill_style =
-                    CanvasFillOrStrokeStyle::Pattern(Dom::from_ref(&*pattern));
+                self.state.fill_style = CanvasFillOrStrokeStyle::Pattern(Dom::from_ref(&*pattern));
                 if !pattern.origin_is_clean() {
                     self.set_origin_unclean();
                 }
@@ -941,7 +939,7 @@ impl CanvasState {
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-save
     pub fn save(&mut self) {
-        self.saved_states.push(self.state.borrow().clone());
+        self.saved_states.push(self.state.clone());
         self.send_canvas_2d_msg(Canvas2dMsg::SaveContext);
     }
 
@@ -949,56 +947,56 @@ impl CanvasState {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-restore
     pub fn restore(&mut self) {
         if let Some(state) = self.saved_states.pop() {
-            self.state.borrow_mut().clone_from(&state);
+            self.state.clone_from(&state);
             self.send_canvas_2d_msg(Canvas2dMsg::RestoreContext);
         }
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-globalalpha
     pub fn global_alpha(&self) -> f64 {
-        self.state.borrow().global_alpha
+        self.state.global_alpha
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-globalalpha
-    pub fn set_global_alpha(&self, alpha: f64) {
+    pub fn set_global_alpha(&mut self, alpha: f64) {
         if !alpha.is_finite() || alpha > 1.0 || alpha < 0.0 {
             return;
         }
 
-        self.state.borrow_mut().global_alpha = alpha;
+        self.state.global_alpha = alpha;
         self.send_canvas_2d_msg(Canvas2dMsg::SetGlobalAlpha(alpha as f32))
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-globalcompositeoperation
     pub fn global_composite_operation(&self) -> DOMString {
-        match self.state.borrow().global_composition {
+        match self.state.global_composition {
             CompositionOrBlending::Composition(op) => DOMString::from(op.to_str()),
             CompositionOrBlending::Blending(op) => DOMString::from(op.to_str()),
         }
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-globalcompositeoperation
-    pub fn set_global_composite_operation(&self, op_str: DOMString) {
+    pub fn set_global_composite_operation(&mut self, op_str: DOMString) {
         if let Ok(op) = CompositionOrBlending::from_str(&op_str) {
-            self.state.borrow_mut().global_composition = op;
+            self.state.global_composition = op;
             self.send_canvas_2d_msg(Canvas2dMsg::SetGlobalComposition(op))
         }
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-imagesmoothingenabled
     pub fn image_smoothing_enabled(&self) -> bool {
-        self.state.borrow().image_smoothing_enabled
+        self.state.image_smoothing_enabled
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-imagesmoothingenabled
-    pub fn set_image_smoothing_enabled(&self, value: bool) {
-        self.state.borrow_mut().image_smoothing_enabled = value;
+    pub fn set_image_smoothing_enabled(&mut self, value: bool) {
+        self.state.image_smoothing_enabled = value;
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-filltext
     pub fn fill_text(&self, text: DOMString, x: f64, y: f64, max_width: Option<f64>) {
         let parsed_text: String = text.into();
-        let style = self.state.borrow().fill_style.to_fill_or_stroke_style();
+        let style = self.state.fill_style.to_fill_or_stroke_style();
         self.send_canvas_2d_msg(Canvas2dMsg::FillText(parsed_text, x, y, max_width, style));
     }
 
@@ -1013,22 +1011,22 @@ impl CanvasState {
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-linewidth
     pub fn line_width(&self) -> f64 {
-        self.state.borrow().line_width
+        self.state.line_width
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-linewidth
-    pub fn set_line_width(&self, width: f64) {
+    pub fn set_line_width(&mut self, width: f64) {
         if !width.is_finite() || width <= 0.0 {
             return;
         }
 
-        self.state.borrow_mut().line_width = width;
+        self.state.line_width = width;
         self.send_canvas_2d_msg(Canvas2dMsg::SetLineWidth(width as f32))
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-linecap
     pub fn line_cap(&self) -> CanvasLineCap {
-        match self.state.borrow().line_cap {
+        match self.state.line_cap {
             LineCapStyle::Butt => CanvasLineCap::Butt,
             LineCapStyle::Round => CanvasLineCap::Round,
             LineCapStyle::Square => CanvasLineCap::Square,
@@ -1036,19 +1034,19 @@ impl CanvasState {
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-linecap
-    pub fn set_line_cap(&self, cap: CanvasLineCap) {
+    pub fn set_line_cap(&mut self, cap: CanvasLineCap) {
         let line_cap = match cap {
             CanvasLineCap::Butt => LineCapStyle::Butt,
             CanvasLineCap::Round => LineCapStyle::Round,
             CanvasLineCap::Square => LineCapStyle::Square,
         };
-        self.state.borrow_mut().line_cap = line_cap;
+        self.state.line_cap = line_cap;
         self.send_canvas_2d_msg(Canvas2dMsg::SetLineCap(line_cap));
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-linejoin
     pub fn line_join(&self) -> CanvasLineJoin {
-        match self.state.borrow().line_join {
+        match self.state.line_join {
             LineJoinStyle::Round => CanvasLineJoin::Round,
             LineJoinStyle::Bevel => CanvasLineJoin::Bevel,
             LineJoinStyle::Miter => CanvasLineJoin::Miter,
@@ -1056,28 +1054,28 @@ impl CanvasState {
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-linejoin
-    pub fn set_line_join(&self, join: CanvasLineJoin) {
+    pub fn set_line_join(&mut self, join: CanvasLineJoin) {
         let line_join = match join {
             CanvasLineJoin::Round => LineJoinStyle::Round,
             CanvasLineJoin::Bevel => LineJoinStyle::Bevel,
             CanvasLineJoin::Miter => LineJoinStyle::Miter,
         };
-        self.state.borrow_mut().line_join = line_join;
+        self.state.line_join = line_join;
         self.send_canvas_2d_msg(Canvas2dMsg::SetLineJoin(line_join));
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-miterlimit
     pub fn miter_limit(&self) -> f64 {
-        self.state.borrow().miter_limit
+        self.state.miter_limit
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-miterlimit
-    pub fn set_miter_limit(&self, limit: f64) {
+    pub fn set_miter_limit(&mut self, limit: f64) {
         if !limit.is_finite() || limit <= 0.0 {
             return;
         }
 
-        self.state.borrow_mut().miter_limit = limit;
+        self.state.miter_limit = limit;
         self.send_canvas_2d_msg(Canvas2dMsg::SetMiterLimit(limit as f32))
     }
 
@@ -1306,13 +1304,13 @@ impl CanvasState {
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-fill
     pub fn fill(&self, _fill_rule: CanvasFillRule) {
         // TODO: Process fill rule
-        let style = self.state.borrow().fill_style.to_fill_or_stroke_style();
+        let style = self.state.fill_style.to_fill_or_stroke_style();
         self.send_canvas_2d_msg(Canvas2dMsg::Fill(style));
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-stroke
     pub fn stroke(&self) {
-        let style = self.state.borrow().stroke_style.to_fill_or_stroke_style();
+        let style = self.state.stroke_style.to_fill_or_stroke_style();
         self.send_canvas_2d_msg(Canvas2dMsg::Stroke(style));
     }
 
@@ -1345,25 +1343,25 @@ impl CanvasState {
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-scale
-    pub fn scale(&self, x: f64, y: f64) {
+    pub fn scale(&mut self, x: f64, y: f64) {
         if !(x.is_finite() && y.is_finite()) {
             return;
         }
 
-        let transform = self.state.borrow().transform;
-        self.state.borrow_mut().transform = transform.pre_scale(x as f32, y as f32);
+        let transform = self.state.transform;
+        self.state.transform = transform.pre_scale(x as f32, y as f32);
         self.update_transform()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-rotate
-    pub fn rotate(&self, angle: f64) {
+    pub fn rotate(&mut self, angle: f64) {
         if angle == 0.0 || !angle.is_finite() {
             return;
         }
 
         let (sin, cos) = (angle.sin(), angle.cos());
-        let transform = self.state.borrow().transform;
-        self.state.borrow_mut().transform = transform.pre_transform(&Transform2D::row_major(
+        let transform = self.state.transform;
+        self.state.transform = transform.pre_transform(&Transform2D::row_major(
             cos as f32,
             sin as f32,
             -sin as f32,
@@ -1375,18 +1373,18 @@ impl CanvasState {
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-translate
-    pub fn translate(&self, x: f64, y: f64) {
+    pub fn translate(&mut self, x: f64, y: f64) {
         if !(x.is_finite() && y.is_finite()) {
             return;
         }
 
-        let transform = self.state.borrow().transform;
-        self.state.borrow_mut().transform = transform.pre_translate(vec2(x as f32, y as f32));
+        let transform = self.state.transform;
+        self.state.transform = transform.pre_translate(vec2(x as f32, y as f32));
         self.update_transform()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-transform
-    pub fn transform(&self, a: f64, b: f64, c: f64, d: f64, e: f64, f: f64) {
+    pub fn transform(&mut self, a: f64, b: f64, c: f64, d: f64, e: f64, f: f64) {
         if !(a.is_finite() &&
             b.is_finite() &&
             c.is_finite() &&
@@ -1397,8 +1395,8 @@ impl CanvasState {
             return;
         }
 
-        let transform = self.state.borrow().transform;
-        self.state.borrow_mut().transform = transform.pre_transform(&Transform2D::row_major(
+        let transform = self.state.transform;
+        self.state.transform = transform.pre_transform(&Transform2D::row_major(
             a as f32, b as f32, c as f32, d as f32, e as f32, f as f32,
         ));
         self.update_transform()
@@ -1414,7 +1412,7 @@ impl CanvasState {
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-settransform
-    pub fn set_transform(&self, a: f64, b: f64, c: f64, d: f64, e: f64, f: f64) {
+    pub fn set_transform(&mut self, a: f64, b: f64, c: f64, d: f64, e: f64, f: f64) {
         if !(a.is_finite() &&
             b.is_finite() &&
             c.is_finite() &&
@@ -1425,14 +1423,14 @@ impl CanvasState {
             return;
         }
 
-        self.state.borrow_mut().transform =
+        self.state.transform =
             Transform2D::row_major(a as f32, b as f32, c as f32, d as f32, e as f32, f as f32);
         self.update_transform()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-resettransform
-    pub fn reset_transform(&self) {
-        self.state.borrow_mut().transform = Transform2D::identity();
+    pub fn reset_transform(&mut self) {
+        self.state.transform = Transform2D::identity();
         self.update_transform()
     }
 
