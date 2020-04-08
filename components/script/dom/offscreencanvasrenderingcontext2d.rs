@@ -68,7 +68,7 @@ impl OffscreenCanvasRenderingContext2D {
     */
 
     pub fn set_canvas_bitmap_dimensions(&self, size: Size2D<u64>) {
-        self.canvas_state.borrow().set_bitmap_dimensions(size);
+        self.canvas_state.borrow_mut().set_bitmap_dimensions(size);
     }
 
     pub fn send_canvas_2d_msg(&self, msg: Canvas2dMsg) {
@@ -214,13 +214,13 @@ impl OffscreenCanvasRenderingContext2DMethods for OffscreenCanvasRenderingContex
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-save
     fn Save(&self) {
-        self.canvas_state.borrow().save()
+        self.canvas_state.borrow_mut().save()
     }
 
     #[allow(unrooted_must_root)]
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-restore
     fn Restore(&self) {
-        self.canvas_state.borrow().restore()
+        self.canvas_state.borrow_mut().restore()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-globalalpha

@@ -131,7 +131,7 @@ pub(crate) struct CanvasState {
     origin: ImmutableOrigin,
     /// Any missing image URLs.
     missing_image_urls: Vec<ServoUrl>,
-    saved_states: DomRefCell<Vec<CanvasContextState>>,
+    saved_states: Vec<CanvasContextState>,
 }
 
 impl CanvasState {
@@ -162,7 +162,7 @@ impl CanvasState {
             image_cache: global.image_cache(),
             base_url: global.api_base_url(),
             missing_image_urls: Vec::new(),
-            saved_states: DomRefCell::new(Vec::new()),
+            saved_states: Vec::new(),
             origin,
         }
     }
@@ -173,14 +173,6 @@ impl CanvasState {
 
     pub fn take_missing_image_urls(&mut self) -> Vec<ServoUrl> {
         mem::replace(&mut self.missing_image_urls, vec![])
-    }
-
-    pub fn get_state(&self) -> &DomRefCell<CanvasContextState> {
-        &self.state
-    }
-
-    pub fn get_saved_state(&self) -> &DomRefCell<Vec<CanvasContextState>> {
-        &self.saved_states
     }
 
     pub fn get_canvas_id(&self) -> CanvasId {
@@ -194,15 +186,15 @@ impl CanvasState {
     }
 
     // https://html.spec.whatwg.org/multipage/#concept-canvas-set-bitmap-dimensions
-    pub fn set_bitmap_dimensions(&self, size: Size2D<u64>) {
+    pub fn set_bitmap_dimensions(&mut self, size: Size2D<u64>) {
         self.reset_to_initial_state();
         self.ipc_renderer
             .send(CanvasMsg::Recreate(size, self.get_canvas_id()))
             .unwrap();
     }
 
-    pub fn reset_to_initial_state(&self) {
-        self.saved_states.borrow_mut().clear();
+    pub fn reset_to_initial_state(&mut self) {
+        self.saved_states.clear();
         *self.state.borrow_mut() = CanvasContextState::new();
     }
 
@@ -948,18 +940,15 @@ impl CanvasState {
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-save
-    pub fn save(&self) {
-        self.saved_states
-            .borrow_mut()
-            .push(self.state.borrow().clone());
+    pub fn save(&mut self) {
+        self.saved_states.push(self.state.borrow().clone());
         self.send_canvas_2d_msg(Canvas2dMsg::SaveContext);
     }
 
     #[allow(unrooted_must_root)]
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-restore
-    pub fn restore(&self) {
-        let mut saved_states = self.saved_states.borrow_mut();
-        if let Some(state) = saved_states.pop() {
+    pub fn restore(&mut self) {
+        if let Some(state) = self.saved_states.pop() {
             self.state.borrow_mut().clone_from(&state);
             self.send_canvas_2d_msg(Canvas2dMsg::RestoreContext);
         }

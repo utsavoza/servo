@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::canvas_state::{CanvasContextState, CanvasState};
+use crate::canvas_state::CanvasState;
 use crate::dom::bindings::cell::DomRefCell;
 use crate::dom::bindings::codegen::Bindings::CanvasRenderingContext2DBinding::CanvasFillRule;
 use crate::dom::bindings::codegen::Bindings::CanvasRenderingContext2DBinding::CanvasImageSource;
@@ -83,12 +83,7 @@ impl CanvasRenderingContext2D {
     //  TODO: This duplicates functionality in canvas state
     // https://html.spec.whatwg.org/multipage/#reset-the-rendering-context-to-its-default-state
     fn reset_to_initial_state(&self) {
-        self.canvas_state
-            .borrow()
-            .get_saved_state()
-            .borrow_mut()
-            .clear();
-        *self.canvas_state.borrow().get_state().borrow_mut() = CanvasContextState::new();
+        self.canvas_state.borrow_mut().reset_to_initial_state();
     }
     /*
         pub fn get_canvas_state(&self) -> Ref<CanvasState> {
@@ -97,7 +92,7 @@ impl CanvasRenderingContext2D {
     */
 
     pub fn set_canvas_bitmap_dimensions(&self, size: Size2D<u64>) {
-        self.canvas_state.borrow().set_bitmap_dimensions(size);
+        self.canvas_state.borrow_mut().set_bitmap_dimensions(size);
     }
 
     pub fn mark_as_dirty(&self) {
@@ -190,13 +185,13 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-save
     fn Save(&self) {
-        self.canvas_state.borrow().save()
+        self.canvas_state.borrow_mut().save()
     }
 
     #[allow(unrooted_must_root)]
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-restore
     fn Restore(&self) {
-        self.canvas_state.borrow().restore()
+        self.canvas_state.borrow_mut().restore()
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-scale
